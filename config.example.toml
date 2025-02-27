@@ -1,0 +1,3 @@
+[api]
+address = "https://api.openai.com/v1"
+secret = "<redacted>"

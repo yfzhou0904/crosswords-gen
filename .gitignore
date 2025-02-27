@@ -173,3 +173,4 @@ cython_debug/
 output/
 config.toml
 config.*.toml
+!config.example.toml
