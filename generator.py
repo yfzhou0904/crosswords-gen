@@ -1,10 +1,10 @@
 import random
+from typing import List, Tuple
 import openai
 from matplotlib import pyplot as plt
 import argparse
 import tomllib as toml
 import os
-from typing import Dict, List, Tuple, Optional
 
 
 class CrosswordGenerator:
@@ -217,7 +217,7 @@ class CrosswordGenerator:
                     clue = response.choices[0].message.content.strip()
                     print(f"Generated clue for {word}: {clue}")
                     self.clues[direction][number] = clue
-                except Exception as e:
+                except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
                     print(f"Error generating clue for {word}: {str(e)}")
                     self.clues[direction][number] = f"Clue not generated: {str(e)}"
 
@@ -317,11 +317,7 @@ def main():
             config = toml.load(config_file)
         api_address = config.get("api", {}).get("address")
         api_secret = config.get("api", {}).get("secret")
-    except FileNotFoundError:
-        print(
-            f"Config file '{args.config}' not found. Continuing without API credentials.")
-        api_address = api_secret = None
-    except Exception as e:
+    except (toml.TOMLDecodeError, OSError) as e:
         print(f"Error reading config file: {e}")
         api_address = api_secret = None
 
