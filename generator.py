@@ -1,10 +1,10 @@
+import os
 import random
 from typing import List, Tuple
-import openai
-from matplotlib import pyplot as plt
 import argparse
 import tomllib as toml
-import os
+import openai
+from matplotlib import pyplot as plt
 
 
 class CrosswordGenerator:
@@ -35,12 +35,12 @@ class CrosswordGenerator:
             if (row+len(word), col) in self.grid:  # Check cell after word ends
                 return False
 
-        for i in range(len(word)):
+        for i, letter in enumerate(word):
             r = row + (i if not is_horizontal else 0)
             c = col + (i if is_horizontal else 0)
 
             if (r, c) in self.grid:
-                if self.grid[(r, c)] != word[i]:
+                if self.grid[(r, c)] != letter:
                     return False
                 overlap = True
             else:
@@ -59,13 +59,13 @@ class CrosswordGenerator:
         overlaps = 0
         is_horizontal = direction == 'horizontal'
 
-        for i in range(len(word)):
+        for i, letter in enumerate(word):
             r = row + (i if not is_horizontal else 0)
             c = col + (i if is_horizontal else 0)
 
             if (r, c) in self.grid:  # If there's already a letter here, it's an overlap
                 overlaps += 1
-            self.grid[(r, c)] = word[i]
+            self.grid[(r, c)] = letter
 
         self.overlap_count += overlaps
         self.placed_words.append({
@@ -199,7 +199,7 @@ class CrosswordGenerator:
                 direction = 'across' if pw['direction'] == 'horizontal' else 'down'
                 self.clues[direction][number] = pw['word']
 
-    def generate_clues(self, base_url: str, api_key: str) -> None:
+    def generate_clues(self, base_url: str, api_key: str, model_id: str) -> None:
         """Generate clues for the crossword using an AI API."""
         openai.api_key = api_key
         openai.base_url = base_url
@@ -208,7 +208,7 @@ class CrosswordGenerator:
             for number, word in list(self.clues[direction].items()):
                 try:
                     response = openai.chat.completions.create(
-                        model="chatgpt-4o-latest",
+                        model=model_id,
                         messages=[
                             {"role": "system", "content": "Generate a concise crossword clue for children. Avoid mentioning the word directly. No need to mention the word length. Start with verb., n., adj., etc."},
                             {"role": "user", "content": f"Word: {word}"}
@@ -317,6 +317,7 @@ def main():
             config = toml.load(config_file)
         api_address = config.get("api", {}).get("address")
         api_secret = config.get("api", {}).get("secret")
+        model_id = config.get("api", {}).get("model_id")
     except (toml.TOMLDecodeError, OSError) as e:
         print(f"Error reading config file: {e}")
         api_address = api_secret = None
@@ -329,7 +330,7 @@ def main():
 
         # Generate clues if API credentials are available
         if api_address and api_secret:
-            generator.generate_clues(api_address, api_secret)
+            generator.generate_clues(api_address, api_secret, model_id)
         else:
             print("API credentials not available. Skipping clue generation.")
 
