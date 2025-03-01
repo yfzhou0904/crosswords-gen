@@ -1,4 +1,4 @@
 [api]
 address = "https://api.openai.com/v1"
-secret = "<redacted>"
-model_id = "gpt-4.5-preview"
+secret = "<secret>"
+model_id = "chatgpt-4o-latest"

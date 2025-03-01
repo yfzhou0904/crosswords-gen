@@ -137,9 +137,3 @@ def draw_clues_section(c: canvas.Canvas, title: str, clues: List[str],
         text_object.moveCursor(0, 3)
 
     c.drawText(text_object)
-
-if __name__ == "__main__":
-    default_image_path = "output/crossword_puzzle_question.png"
-    default_clues_path = "output/crossword_clues.txt"
-    default_output_pdf_path = "output/puzzle.pdf"
-    create_crossword_pdf(default_image_path, default_clues_path, default_output_pdf_path)
