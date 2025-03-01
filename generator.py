@@ -4,8 +4,18 @@ from typing import List, Tuple, Dict
 import argparse
 import tomllib as toml
 import openai
+from dataclasses import dataclass
 from matplotlib import pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
+
+
+@dataclass
+class PlacedWord:
+    """Represents a word placed on the crossword grid."""
+    word: str
+    row: int
+    col: int
+    direction: str
 
 
 class CrosswordGenerator:
@@ -15,26 +25,22 @@ class CrosswordGenerator:
         """Initialize the crossword generator with a list of words."""
         self.words: List[str] = list(set(words))  # Remove duplicates
         self.grid: Dict[Tuple[int, int], str] = {}  # (row, col): char
-        self.placed_words: List[Tuple[str, int, int, str]] = []  # List of placed words and their metadata
-        self.clue_ids: Dict[str, Dict[int, str]] = {'across': {}, 'down': {}}  # Clues for across and down
-        self.clues: Dict[str, Dict[int, str]] = {'across': {}, 'down': {}}  # Clues for across and down
-        self.overlap_count: int = 0  # Track overlaps
+        self.placed_words: List[PlacedWord] = []
+        self.clue_ids: Dict[str, Dict[int, str]] = {'across': {}, 'down': {}}
+        self.clues: Dict[str, Dict[int, str]] = {'across': {}, 'down': {}}
+        self.overlap_count: int = 0
 
     def can_place(self, word: str, row: int, col: int, direction: str) -> bool:
         """Check if a word can be placed at the specified position and direction."""
         overlap = False
         is_horizontal = direction == 'horizontal'
 
-        # Check before the word starts
+        # Check before the word starts and after it ends
         if is_horizontal:
-            if (row, col-1) in self.grid:  # Check cell before word starts
-                return False
-            if (row, col+len(word)) in self.grid:  # Check cell after word ends
+            if (row, col-1) in self.grid or (row, col+len(word)) in self.grid:
                 return False
         else:  # vertical
-            if (row-1, col) in self.grid:  # Check cell before word starts
-                return False
-            if (row+len(word), col) in self.grid:  # Check cell after word ends
+            if (row-1, col) in self.grid or (row+len(word), col) in self.grid:
                 return False
 
         for i, letter in enumerate(word):
@@ -65,27 +71,22 @@ class CrosswordGenerator:
             r = row + (i if not is_horizontal else 0)
             c = col + (i if is_horizontal else 0)
 
-            if (r, c) in self.grid:  # If there's already a letter here, it's an overlap
+            if (r, c) in self.grid:
                 overlaps += 1
             self.grid[(r, c)] = letter
 
         self.overlap_count += overlaps
-        self.placed_words.append({
-            'word': word,
-            'row': row,
-            'col': col,
-            'direction': direction
-        })
+        self.placed_words.append(PlacedWord(word, row, col, direction))
 
     def _try_place_word(self, word: str) -> bool:
         """Try to place a single word in the existing grid."""
         random.shuffle(self.placed_words)
 
         for placed_word in self.placed_words:
-            pw_row = placed_word['row']
-            pw_col = placed_word['col']
-            pw_dir = placed_word['direction']
-            pw_word = placed_word['word']
+            pw_row = placed_word.row
+            pw_col = placed_word.col
+            pw_dir = placed_word.direction
+            pw_word = placed_word.word
 
             target_dir = 'vertical' if pw_dir == 'horizontal' else 'horizontal'
 
@@ -99,13 +100,11 @@ class CrosswordGenerator:
 
                     # Calculate new position
                     if target_dir == 'vertical':
-                        new_row = pw_row - idx_new if pw_dir == 'horizontal' else pw_row + \
-                            (idx_placed - idx_new)
+                        new_row = pw_row - idx_new if pw_dir == 'horizontal' else pw_row + (idx_placed - idx_new)
                         new_col = pw_col + idx_placed if pw_dir == 'horizontal' else pw_col
                     else:
                         new_row = pw_row + idx_placed if pw_dir == 'vertical' else pw_row
-                        new_col = pw_col - idx_new if pw_dir == 'vertical' else pw_col + \
-                            (idx_placed - idx_new)
+                        new_col = pw_col - idx_new if pw_dir == 'vertical' else pw_col + (idx_placed - idx_new)
 
                     if self.can_place(word, new_row, new_col, target_dir):
                         self.place_word(word, new_row, new_col, target_dir)
@@ -128,8 +127,7 @@ class CrosswordGenerator:
             self.clue_ids = {'across': {}, 'down': {}}
 
             # Sort words by length (longest first) with some randomization
-            sorted_words = sorted(
-                self.words, key=lambda x: (-len(x), random.random()))
+            sorted_words = sorted(self.words, key=lambda x: (-len(x), random.random()))
 
             if not sorted_words:
                 return False
@@ -147,7 +145,6 @@ class CrosswordGenerator:
                     break
 
             if all_placed:
-                # All words placed successfully
                 self._assign_clue_numbers()
                 if self.overlap_count > best_overlap_count:
                     best_grid = dict(self.grid)
@@ -155,8 +152,7 @@ class CrosswordGenerator:
                     best_overlap_count = self.overlap_count
                     best_clues = dict(self.clue_ids)
 
-            print(
-                f"Attempt {attempt + 1} of {max_attempts}: {self.overlap_count} overlaps")
+            print(f"Attempt {attempt + 1} of {max_attempts}: {self.overlap_count} overlaps")
 
         # Use the best grid found
         if best_grid is not None:
@@ -174,8 +170,8 @@ class CrosswordGenerator:
         start_positions = []
 
         for pw in self.placed_words:
-            row, col = pw['row'], pw['col']
-            if pw['direction'] == 'horizontal':
+            row, col = pw.row, pw.col
+            if pw.direction == 'horizontal':
                 if (row, col - 1) not in self.grid:
                     start_positions.append((row, col))
             else:
@@ -186,20 +182,20 @@ class CrosswordGenerator:
         start_positions.sort(key=lambda x: (x[0], x[1]))
 
         # Assign numbers uniquely
-        seen = {}
+        position_to_number = {}
         number = 1
         for pos in start_positions:
-            if pos not in seen:
-                seen[pos] = number
+            if pos not in position_to_number:
+                position_to_number[pos] = number
                 number += 1
 
         # Assign clues with numbers
         for pw in self.placed_words:
-            row, col = pw['row'], pw['col']
-            if (row, col) in seen:
-                number = seen[(row, col)]
-                direction = 'across' if pw['direction'] == 'horizontal' else 'down'
-                self.clue_ids[direction][number] = pw['word']
+            row, col = pw.row, pw.col
+            if (row, col) in position_to_number:
+                number = position_to_number[(row, col)]
+                direction = 'across' if pw.direction == 'horizontal' else 'down'
+                self.clue_ids[direction][number] = pw.word
 
     def generate_clues(self, base_url: str, api_key: str, model_id: str) -> None:
         """Generate clues for the crossword using an AI API."""
@@ -229,12 +225,9 @@ class CrosswordGenerator:
             print("No clues generated.")
             return
 
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
-        # Create and write to the clues file
         with open(f'{output_dir}/crossword_clues.txt', 'w', encoding='utf-8') as f:
-            # Write across clues
             f.write("ACROSS:\n")
             for number in sorted(self.clues['across'].keys()):
                 f.write(f"{number}: {self.clues['across'][number]}\n")
@@ -247,6 +240,9 @@ class CrosswordGenerator:
 
     def get_grid_bounds(self) -> Tuple[int, int, int, int]:
         """Get the minimum and maximum row and column values of the grid."""
+        if not self.grid:
+            return 0, 0, 0, 0
+            
         rows = [r for r, _ in self.grid.keys()]
         cols = [c for _, c in self.grid.keys()]
         return min(rows), max(rows), min(cols), max(cols)
@@ -273,17 +269,14 @@ class CrosswordGenerator:
         if not self.grid:
             return
 
-        # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
 
         min_row, max_row, min_col, max_col = self.get_grid_bounds()
 
-        # Generate and save answer grid
         self._create_grid_plot(min_row, max_row, min_col, max_col,
                                show_letters=True,
                                filename=f'{output_dir}/answer.png')
 
-        # Generate and save question grid
         self._create_grid_plot(min_row, max_row, min_col, max_col,
                                show_letters=False,
                                filename=f'{output_dir}/question.png')
@@ -321,19 +314,17 @@ class CrosswordGenerator:
     
     def draw_grid(self, answer: bool = False, output_dir: str = 'output') -> None:
         """Draw the crossword grid as an image with clue numbers."""
-        # Get grid bounds
         min_row, max_row, min_col, max_col = self.get_grid_bounds()
         
         # Create a mapping of starting positions to clue numbers
         clue_positions = {}
         for pw in self.placed_words:
-            row, col = pw['row'], pw['col']
-            direction = pw['direction']
+            row, col = pw.row, pw.col
+            direction = pw.direction
             
-            # Find the corresponding clue number
             for direction_key in ['across', 'down']:
                 for number, word in self.clue_ids[direction_key].items():
-                    if word == pw['word'] and (
+                    if word == pw.word and (
                         (direction == 'horizontal' and direction_key == 'across') or
                         (direction == 'vertical' and direction_key == 'down')
                     ):
@@ -346,7 +337,7 @@ class CrosswordGenerator:
         font_size = 20
         number_size = 10
         
-        # Calculate image dimensions based on grid bounds
+        # Calculate image dimensions
         grid_width = max_col - min_col + 1
         grid_height = max_row - min_row + 1
         img_width = grid_width * cell_size + 2 * padding
@@ -357,27 +348,23 @@ class CrosswordGenerator:
         draw = ImageDraw.Draw(img)
         
         try:
-            # Try to load a nicer font if available
             main_font = ImageFont.truetype("Arial", font_size)
             number_font = ImageFont.truetype("Arial", number_size)
         except IOError:
-            # Fall back to default font
             main_font = ImageFont.load_default()
             number_font = ImageFont.load_default()
         
         # Draw the grid cells
         for r in range(min_row, max_row + 1):
             for c in range(min_col, max_col + 1):
-                # Convert grid coordinates to image coordinates
                 x = padding + (c - min_col) * cell_size
                 y = padding + (r - min_row) * cell_size
                 
-                # Draw cell if it contains a letter
                 if (r, c) in self.grid:
                     # Draw cell rectangle
                     draw.rectangle([x, y, x + cell_size, y + cell_size], outline='black', width=1)
                     
-                    # Draw letter
+                    # Draw letter if answer grid
                     letter = ' '
                     if answer:
                         letter = self.grid[(r, c)].upper()
@@ -386,7 +373,7 @@ class CrosswordGenerator:
                         letter,
                         fill='black',
                         font=main_font,
-                        anchor="mm"  # Center text
+                        anchor="mm"
                     )
                     
                     # Draw clue number if this is a starting position
@@ -399,31 +386,22 @@ class CrosswordGenerator:
                         )
         
         os.makedirs(output_dir, exist_ok=True)
-        if answer:
-            img.save(f'{output_dir}/crossword_puzzle_answer.png')
-            print(f"Crossword image saved as '{output_dir}/crossword_puzzle_answer.png'")
-        else:
-            img.save(f'{output_dir}/crossword_puzzle_question.png')
-            print(f"Crossword image saved as '{output_dir}/crossword_puzzle_question.png'")
-
+        filename = f'{output_dir}/crossword_puzzle_{"answer" if answer else "question"}.png'
+        img.save(filename)
+        print(f"Crossword image saved as '{filename}'")
 
 
 def main():
     """Main function to run the crossword generator."""
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Generate a crossword puzzle.")
-    parser.add_argument("words", nargs="+",
-                        help="List of words to include in the crossword.")
-    parser.add_argument("--max-attempts", type=int, default=30,
-                        help="Maximum number of attempts to generate a grid")
-    parser.add_argument("--output-dir", default="output",
-                        help="Directory to save output files")
-    parser.add_argument("--config", default="config.toml",
-                        help="Path to configuration file")
+    parser = argparse.ArgumentParser(description="Generate a crossword puzzle.")
+    parser.add_argument("words", nargs="+", help="List of words to include in the crossword.")
+    parser.add_argument("--max-attempts", type=int, default=30, help="Maximum number of attempts to generate a grid")
+    parser.add_argument("--output-dir", default="output", help="Directory to save output files")
+    parser.add_argument("--config", default="config.toml", help="Path to configuration file")
     args = parser.parse_args()
 
     # Read configuration
+    api_address = api_secret = model_id = None
     try:
         with open(args.config, "rb") as config_file:
             config = toml.load(config_file)
@@ -432,7 +410,6 @@ def main():
         model_id = config.get("api", {}).get("model_id")
     except (toml.TOMLDecodeError, OSError) as e:
         print(f"Error reading config file: {e}")
-        api_address = api_secret = None
 
     # Generate the crossword
     generator = CrosswordGenerator(args.words)
