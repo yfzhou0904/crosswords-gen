@@ -5,7 +5,6 @@ import argparse
 import tomllib as toml
 import openai
 from dataclasses import dataclass
-from matplotlib import pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from pdf import create_crossword_pdf
 
@@ -264,54 +263,6 @@ class CrosswordGenerator:
                 else:
                     row_str.append(' ')
             print(' '.join(row_str))
-
-    def plot_grid(self, output_dir: str = 'output') -> None:
-        """Plot the grid as images (answer and question)."""
-        if not self.grid:
-            return
-
-        os.makedirs(output_dir, exist_ok=True)
-
-        min_row, max_row, min_col, max_col = self.get_grid_bounds()
-
-        self._create_grid_plot(min_row, max_row, min_col, max_col,
-                               show_letters=True,
-                               filename=f'{output_dir}/answer.png')
-
-        self._create_grid_plot(min_row, max_row, min_col, max_col,
-                               show_letters=False,
-                               filename=f'{output_dir}/question.png')
-
-    def _create_grid_plot(self, min_row: int, max_row: int, min_col: int, max_col: int,
-                          show_letters: bool, filename: str) -> None:
-        """Create and save a single grid plot."""
-        _, ax = plt.subplots(figsize=(10, 10))
-        ax.set_xlim(min_col - 1, max_col + 1)
-        ax.set_ylim(min_row - 1, max_row + 1)
-        ax.set_aspect('equal')
-        ax.axis('off')
-
-        for (r, c), letter in self.grid.items():
-            rect = plt.Rectangle(
-                (c - 0.5, r - 0.5),
-                1, 1,
-                fill=None,
-                edgecolor='black',
-                linewidth=1
-            )
-            ax.add_patch(rect)
-
-            if show_letters:
-                ax.text(c, r, letter.upper(), va='center',
-                        ha='center', fontsize=12)
-
-        plt.gca().invert_yaxis()
-        plt.savefig(filename, bbox_inches='tight')
-        plt.close()
-
-    def get_overlap_count(self) -> int:
-        """Returns the total number of overlapping letters in the crossword."""
-        return self.overlap_count
     
     def draw_grid(self, answer: bool = False, output_dir: str = 'output') -> None:
         """Draw the crossword grid as an image with clue numbers."""

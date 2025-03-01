@@ -1,9 +1,9 @@
+from typing import List, Tuple
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from reportlab.lib import colors
 from PIL import Image
-from typing import List, Tuple
 
 def create_crossword_pdf(image_path: str, clues_path: str, output_pdf_path: str) -> None:
     # Load clues
