@@ -7,6 +7,7 @@ import openai
 from dataclasses import dataclass
 from matplotlib import pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
+from pdf import create_crossword_pdf
 
 
 @dataclass
@@ -230,11 +231,11 @@ class CrosswordGenerator:
         with open(f'{output_dir}/crossword_clues.txt', 'w', encoding='utf-8') as f:
             f.write("ACROSS:\n")
             for number in sorted(self.clues['across'].keys()):
-                f.write(f"{number}: {self.clues['across'][number]}\n")
+                f.write(f"{number}: {self.clues['across'][number]} ({len(self.clue_ids['across'][number])})\n")
             
             f.write("\nDOWN:\n")
             for number in sorted(self.clues['down'].keys()):
-                f.write(f"{number}: {self.clues['down'][number]}\n")
+                f.write(f"{number}: {self.clues['down'][number]} ({len(self.clue_ids['down'][number])})\n")
         
         print(f"Clues saved to '{output_dir}/crossword_clues.txt'")
 
@@ -427,6 +428,18 @@ def main():
         # Save as images
         generator.draw_grid(answer=False, output_dir=args.output_dir)
         generator.draw_grid(answer=True, output_dir=args.output_dir)
+        
+        # Create PDF
+        create_crossword_pdf(
+            image_path=f"{args.output_dir}/crossword_puzzle_question.png",
+            clues_path=f"{args.output_dir}/crossword_clues.txt",
+            output_pdf_path=f"{args.output_dir}/crossword_puzzle.pdf"
+        )
+        create_crossword_pdf(
+            image_path=f"{args.output_dir}/crossword_puzzle_answer.png",
+            clues_path=f"{args.output_dir}/crossword_clues.txt",
+            output_pdf_path=f"{args.output_dir}/crossword_puzzle_answer.pdf"
+        )
     else:
         print("Failed to generate grid with all words.")
 
