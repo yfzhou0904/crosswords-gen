@@ -363,4 +363,7 @@ def cleanup():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=81, debug=False)
+    listen_addr = config.get("web", {}).get("listen_address", "0.0.0.0:80")
+    host, port = listen_addr.split(":")
+    port = int(port)
+    app.run(host=host, port=port, debug=False)
