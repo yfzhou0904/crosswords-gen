@@ -1,10 +1,10 @@
 import os
+from dataclasses import dataclass
 import random
 from typing import List, Tuple, Dict
 import argparse
 import tomllib as toml
 import openai
-from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 from pdf import create_crossword_pdf
 
@@ -120,7 +120,6 @@ class CrosswordGenerator:
         best_clues = None
 
         for attempt in range(max_attempts):
-            print(f"Attempt {attempt + 1} of {max_attempts}")
             self.grid = {}
             self.placed_words = []
             self.overlap_count = 0
