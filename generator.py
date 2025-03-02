@@ -203,21 +203,30 @@ class CrosswordGenerator:
 
         for direction in ['across', 'down']:
             for number, word in list(self.clue_ids[direction].items()):
-                try:
-                    response = openai.chat.completions.create(
-                        model=model_id,
-                        messages=[
-                            {"role": "system", "content": "Generate a concise 1-line crossword clue for children. Avoid mentioning the word directly. No need to mention the word length. Start with verb., n., adj., etc. Your response should be in this format 'n. <Description>.'"},
-                            {"role": "user", "content": f"Word: {word}"}
-                        ]
-                    )
-                    clue = response.choices[0].message.content.strip()
-                    print(f"Generated clue for {word}: {clue}")
-                    self.clues[direction][number] = clue
-                except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
-                    print(f"Error generating clue for {word}: {str(e)}")
-                    self.clues[direction][number] = f"Clue not generated: {str(e)}"
-                    
+                clue = self.generate_single_clue(word, base_url, api_key, model_id)
+                self.clues[direction][number] = clue
+
+    def generate_single_clue(self, word: str, base_url: str, api_key: str, model_id: str) -> str:
+        """Generate a single clue for a word using the AI API."""
+        try:
+            openai.api_key = api_key
+            openai.base_url = base_url
+
+            response = openai.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": "Generate a concise 1-line crossword clue for children. Avoid mentioning the word directly. No need to mention the word length. Start with verb., n., adj., etc. Your response should be in this format 'n. <Description>.'"},
+                    {"role": "user", "content": f"Word: {word}"}
+                ]
+            )
+            clue = response.choices[0].message.content.strip()
+            print(f"Generated clue for {word}: {clue}")
+            return clue
+        except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
+            error_message = f"Clue not generated: {str(e)}"
+            print(f"Error generating clue for {word}: {str(e)}")
+            return error_message
+
     def save_clues_text(self, output_dir: str = 'output') -> None:
         """Save the crossword clues to a text file in the format '1: <clue text>'."""
         if not self.clues:

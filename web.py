@@ -1,9 +1,10 @@
 import os
-from flask import Flask, request, render_template, jsonify, send_file
+from flask import Flask, request, render_template, jsonify, send_file, Response
 from typing import Dict
 import base64
 import tomllib as toml
 from generator import CrosswordGenerator
+import json
 
 app = Flask(__name__)
 
@@ -19,6 +20,30 @@ try:
 except (toml.TOMLDecodeError, OSError) as e:
     print(f"Error reading config file: {e}")
 
+# Verify secret keys are configured
+if not config.get("web", {}).get("secret", ""):
+    print("Warning: No secret keys configured in config.toml")
+    config["web"]["secret"] = []
+
+
+def require_secret_key(f):
+    """Decorator to verify X-Secret-Key header."""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        secret_key = request.headers.get('X-Secret-Key')
+        if not secret_key or secret_key not in config["web"]["secret"]:
+            print(
+                f"received secret {secret_key}, acceptable: {config["web"]["secret"]}")
+            return jsonify({
+                'success': False,
+                'message': 'Invalid or missing X-Secret-Key header'
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 # Ensure output directory exists
 OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -31,6 +56,7 @@ def index():
 
 
 @app.route('/generate_grid', methods=['POST'])
+@require_secret_key
 def generate_grid():
     """Generate a crossword grid from the provided words."""
     data = request.json
@@ -98,18 +124,24 @@ def generate_grid():
 
 
 @app.route('/generate_clues', methods=['POST'])
+@require_secret_key
 def generate_clues():
     """Generate clues for the crossword using AI."""
     data = request.json
     client_id = data['clientId']
 
-    if client_id not in generators:
+    # verify requisite files (puzzle and answer image) were generated
+    temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
+    if not os.path.exists(f"{temp_output_dir}/crossword_puzzle_question.png"):
         return jsonify({
             'success': False,
-            'message': 'No grid found. Please generate a grid first.'
+            'message': 'Question image not found. Please generate a grid first.'
         })
-
-    generator = generators[client_id]
+    if not os.path.exists(f"{temp_output_dir}/crossword_puzzle_answer.png"):
+        return jsonify({
+            'success': False,
+            'message': 'Answer image not found. Please generate a grid first.'
+        })
 
     # Generate clues using API
     api_address = config.get("api", {}).get("address")
@@ -122,35 +154,94 @@ def generate_clues():
             'message': 'API credentials not available. Check your config.toml file.'
         })
 
-    generator.generate_clues(api_address, api_secret, model_id)
-
-    # Format clues for response
-    clues_data = {
-        'across': {},
-        'down': {}
-    }
-
-    for direction in ['across', 'down']:
-        for number, word in generator.clue_ids[direction].items():
-            clue = generator.clues[direction].get(
-                number, f"({len(word)}) Enter clue for {word}")
-            clues_data[direction][number] = {
-                'word': word,
-                'clue': clue
-            }
-
-    # Save clues to text file
-    temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
-    os.makedirs(temp_output_dir, exist_ok=True)
-    generator.save_clues_text(temp_output_dir)
-
+    # Start SSE stream for progress updates
     return jsonify({
         'success': True,
-        'clues': clues_data
+        'message': 'Started clue generation'
     })
 
 
+@app.route('/stream_clues', methods=['GET'])
+def stream_clues():
+    """Stream clue generation progress using SSE."""
+    client_id = request.args.get('clientId')
+    secret_key = request.args.get('secret')
+
+    # Verify secret key
+    if not secret_key or secret_key not in config["web"]["secret"]:
+        def error_stream_secret():
+            yield 'data: ' + json.dumps({
+                'error': 'Invalid or missing secret key'
+            }) + '\n\n'
+        return Response(error_stream_secret(), mimetype='text/event-stream')
+
+    if client_id not in generators:
+        def error_stream_clientid():
+            yield 'data: ' + json.dumps({
+                'error': 'No grid found. Please generate a grid first.'
+            }) + '\n\n'
+        return Response(error_stream_clientid(), mimetype='text/event-stream')
+
+    generator = generators[client_id]
+    api_address = config.get("api", {}).get("address")
+    api_secret = config.get("api", {}).get("secret")
+    model_id = config.get("api", {}).get("model_id")
+
+    def generate():
+        try:
+            total_words = len(
+                generator.clue_ids['across']) + len(generator.clue_ids['down'])
+            current_word = 0
+
+            # Initialize clues dictionaries
+            generator.clues = {'across': {}, 'down': {}}
+
+            # Generate clues with progress updates
+            for direction in ['across', 'down']:
+                for number, word in generator.clue_ids[direction].items():
+                    current_word += 1
+                    progress = (current_word / total_words) * 100
+
+                    # Generate clue for current word
+                    clue = generator.generate_single_clue(
+                        word, api_address, api_secret, model_id)
+                    generator.clues[direction][number] = clue
+
+                    # Send progress update
+                    yield 'data: ' + json.dumps({
+                        'progress': progress,
+                        'currentWord': word,
+                        'direction': direction,
+                        'number': number,
+                        'clue': clue
+                    }) + '\n\n'
+
+            # Save clues to text file
+            temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
+            os.makedirs(temp_output_dir, exist_ok=True)
+            generator.save_clues_text(temp_output_dir)
+
+            # Send completion message
+            yield 'data: ' + json.dumps({
+                'complete': True,
+                'clues': {
+                    'across': {str(k): {'word': generator.clue_ids['across'][k], 'clue': v}
+                               for k, v in generator.clues['across'].items()},
+                    'down': {str(k): {'word': generator.clue_ids['down'][k], 'clue': v}
+                             for k, v in generator.clues['down'].items()}
+                }
+            }) + '\n\n'
+
+        except (ConnectionError, TimeoutError, ValueError, KeyError) as e:
+            yield 'data: ' + json.dumps({
+                'error': str(e)
+            }) + '\n\n'
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
 @app.route('/update_clues', methods=['POST'])
+@require_secret_key
 def update_clues():
     """Update clues with user-edited versions."""
     data = request.json
@@ -183,6 +274,7 @@ def update_clues():
 
 
 @app.route('/export_pdf', methods=['POST'])
+@require_secret_key
 def export_pdf():
     """Create and return PDF files for the crossword."""
     data = request.json
@@ -271,471 +363,4 @@ def cleanup():
 
 
 if __name__ == '__main__':
-    # Create templates directory if it doesn't exist
-    os.makedirs('templates', exist_ok=True)
-
-    # Create the HTML template
-    with open('templates/index.html', 'w', encoding='utf-8') as f:
-        f.write('''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crossword Generator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .input-section {
-            flex: 1;
-            min-width: 300px;
-        }
-        .output-section {
-            flex: 2;
-            min-width: 500px;
-        }
-        textarea {
-            width: 100%;
-            min-height: 200px;
-            margin-bottom: 10px;
-            padding: 8px;
-        }
-        button {
-            padding: 10px 15px;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        .image-container {
-            margin-top: 20px;
-            text-align: center;
-        }
-        .image-container img {
-            max-width: 100%;
-            border: 1px solid #ddd;
-        }
-        .clues-container {
-            margin-top: 20px;
-        }
-        .clues-editor {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .clue-column {
-            flex: 1;
-            min-width: 300px;
-        }
-        .clue-item {
-            margin-bottom: 10px;
-        }
-        .clue-input {
-            width: 100%;
-            padding: 8px;
-        }
-        .tabs {
-            display: flex;
-            margin-bottom: 10px;
-        }
-        .tab {
-            padding: 10px 15px;
-            cursor: pointer;
-            background-color: #f1f1f1;
-            border: 1px solid #ddd;
-            border-bottom: none;
-        }
-        .tab.active {
-            background-color: white;
-            border-bottom: 1px solid white;
-        }
-        .tab-content {
-            display: none;
-            padding: 15px;
-            border: 1px solid #ddd;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
-</head>
-<body>
-    <h1>Crossword Generator</h1>
-
-    <div class="container">
-        <div class="input-section">
-            <h2>Input Words</h2>
-            <p>Enter one word per line:</p>
-            <textarea id="wordsInput" placeholder="Enter words here, one per line..."></textarea>
-
-            <button id="generateGridBtn">Generate Grid</button>
-            <button id="generateCluesBtn" disabled>Generate Clues</button>
-            <button id="exportPdfBtn" disabled>Export PDF</button>
-        </div>
-
-        <div class="output-section">
-            <div class="tabs">
-                <div class="tab active" data-tab="grid">Puzzle</div>
-                <div class="tab" data-tab="answer">Answer</div>
-                <div class="tab" data-tab="clues">Clues</div>
-            </div>
-
-            <div class="tab-content active" id="gridTab">
-                <div class="image-container">
-                    <img id="gridImage" src="" alt="Crossword grid will appear here" style="display: none;">
-                    <p id="gridMessage">Generate a grid to see the crossword puzzle.</p>
-                </div>
-            </div>
-
-            <div class="tab-content" id="cluesTab">
-                <div class="clues-container">
-                    <div class="clues-editor">
-                        <div class="clue-column">
-                            <h3>Across</h3>
-                            <div id="acrossClues"></div>
-                        </div>
-                        <div class="clue-column">
-                            <h3>Down</h3>
-                            <div id="downClues"></div>
-                        </div>
-                    </div>
-                    <button id="updateCluesBtn" style="display: none;">Update Clues</button>
-                </div>
-            </div>
-
-            <div class="tab-content" id="answerTab">
-                <div class="image-container">
-                    <img id="answerImage" src="" alt="Answer grid will appear here" style="display: none;">
-                    <p id="answerMessage">Generate a grid to see the answer.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Generate a UUID for this session
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
-
-        const clientId = generateUUID();
-        let cluesData = null;
-
-        // Tab functionality
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
-            });
-        });
-
-        // Generate Grid
-        document.getElementById('generateGridBtn').addEventListener('click', async function() {
-            const wordsInput = document.getElementById('wordsInput').value.trim();
-
-            if (!wordsInput) {
-                alert('Please enter at least one word.');
-                return;
-            }
-
-            // Show loading state
-            const originalText = this.textContent;
-            this.innerHTML = '<span class="spinner"></span> Generating...';
-            this.disabled = true;
-
-            try {
-                const response = await fetch('/generate_grid', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        words: wordsInput,
-                        clientId: clientId,
-                        maxAttempts: 30
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // Update grid image
-                    const gridImage = document.getElementById('gridImage');
-                    gridImage.src = 'data:image/png;base64,' + data.questionImage;
-                    gridImage.style.display = 'block';
-                    document.getElementById('gridMessage').style.display = 'none';
-
-                    // Update answer image
-                    const answerImage = document.getElementById('answerImage');
-                    answerImage.src = 'data:image/png;base64,' + data.answerImage;
-                    answerImage.style.display = 'block';
-                    document.getElementById('answerMessage').style.display = 'none';
-
-                    // Enable generate clues button
-                    document.getElementById('generateCluesBtn').disabled = false;
-
-                    // Store clues structure
-                    cluesData = data.cluesStructure;
-
-                    // Populate clues with placeholders
-                    populateCluesEditor(cluesData);
-                    document.getElementById('updateCluesBtn').style.display = 'block';
-                } else {
-                    alert(data.message || 'Failed to generate grid.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Restore button state
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }
-        });
-
-        // Generate Clues
-        document.getElementById('generateCluesBtn').addEventListener('click', async function() {
-            // Show loading state
-            const originalText = this.textContent;
-            this.innerHTML = '<span class="spinner"></span> Generating...';
-            this.disabled = true;
-
-            try {
-                const response = await fetch('/generate_clues', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        clientId: clientId
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // Update clues
-                    cluesData = data.clues;
-                    populateCluesEditor(cluesData);
-                    document.getElementById('updateCluesBtn').style.display = 'block';
-
-                    // Enable export button
-                    document.getElementById('exportPdfBtn').disabled = false;
-
-                    // Switch to clues tab
-                    document.querySelector('.tab[data-tab="clues"]').click();
-                } else {
-                    alert(data.message || 'Failed to generate clues.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Restore button state
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }
-        });
-
-        // Update Clues
-        document.getElementById('updateCluesBtn').addEventListener('click', async function() {
-            // Collect all clues from the editor
-            const updatedClues = {
-                across: {},
-                down: {}
-            };
-
-            document.querySelectorAll('#acrossClues .clue-item').forEach(item => {
-                const number = item.dataset.number;
-                const word = item.dataset.word;
-                const clue = item.querySelector('input').value;
-                updatedClues.across[number] = { word, clue };
-            });
-
-            document.querySelectorAll('#downClues .clue-item').forEach(item => {
-                const number = item.dataset.number;
-                const word = item.dataset.word;
-                const clue = item.querySelector('input').value;
-                updatedClues.down[number] = { word, clue };
-            });
-
-            // Show loading state
-            const originalText = this.textContent;
-            this.innerHTML = '<span class="spinner"></span> Updating...';
-            this.disabled = true;
-
-            try {
-                const response = await fetch('/update_clues', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        clientId: clientId,
-                        clues: updatedClues
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert('Clues updated successfully.');
-
-                    // Enable export button
-                    document.getElementById('exportPdfBtn').disabled = false;
-                } else {
-                    alert(data.message || 'Failed to update clues.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Restore button state
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }
-        });
-
-        // Export PDF
-        document.getElementById('exportPdfBtn').addEventListener('click', async function() {
-            // Show loading state
-            const originalText = this.textContent;
-            this.innerHTML = '<span class="spinner"></span> Exporting...';
-            this.disabled = true;
-
-            try {
-                const response = await fetch('/export_pdf', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        clientId: clientId
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // Download the PDFs
-                    window.open(data.questionPdfUrl, '_blank');
-                    window.open(data.answerPdfUrl, '_blank');
-                } else {
-                    alert(data.message || 'Failed to export PDFs.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Restore button state
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }
-        });
-
-        // Helper function to populate clues editor
-        function populateCluesEditor(clues) {
-            const acrossContainer = document.getElementById('acrossClues');
-            const downContainer = document.getElementById('downClues');
-
-            acrossContainer.innerHTML = '';
-            downContainer.innerHTML = '';
-
-            // Sort numbers numerically
-            const sortedAcross = Object.keys(clues.across).sort((a, b) => parseInt(a) - parseInt(b));
-            const sortedDown = Object.keys(clues.down).sort((a, b) => parseInt(a) - parseInt(b));
-
-            // Populate across clues
-            sortedAcross.forEach(number => {
-                const word = clues.across[number].word;
-                const clue = clues.across[number].clue;
-
-                const clueItem = document.createElement('div');
-                clueItem.className = 'clue-item';
-                clueItem.dataset.number = number;
-                clueItem.dataset.word = word;
-
-                clueItem.innerHTML = `
-                    <label>${number}. (${word.length}) ${word}</label>
-                    <input type="text" class="clue-input" value="${clue}">
-                `;
-
-                acrossContainer.appendChild(clueItem);
-            });
-
-            // Populate down clues
-            sortedDown.forEach(number => {
-                const word = clues.down[number].word;
-                const clue = clues.down[number].clue;
-
-                const clueItem = document.createElement('div');
-                clueItem.className = 'clue-item';
-                clueItem.dataset.number = number;
-                clueItem.dataset.word = word;
-
-                clueItem.innerHTML = `
-                    <label>${number}. (${word.length}) ${word}</label>
-                    <input type="text" class="clue-input" value="${clue}">
-                `;
-
-                downContainer.appendChild(clueItem);
-            });
-        }
-
-        // Clean up resources when the page is closed or refreshed
-        window.addEventListener('beforeunload', async () => {
-            try {
-                await fetch('/cleanup', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        clientId: clientId
-                    }),
-                    keepalive: true
-                });
-            } catch (error) {
-                console.error('Error during cleanup:', error);
-            }
-        });
-    </script>
-</body>
-</html>
-        ''')
-
     app.run(host='0.0.0.0', port=81, debug=False)

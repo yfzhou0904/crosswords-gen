@@ -2,3 +2,6 @@
 address = "https://api.openai.com/v1"
 secret = "<secret>"
 model_id = "chatgpt-4o-latest"
+
+[web]
+secret = ["top-secret"]
