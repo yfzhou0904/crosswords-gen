@@ -201,6 +201,6 @@
 	.container {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 20px;
+		gap: 2.5rem;
 	}
 </style>
