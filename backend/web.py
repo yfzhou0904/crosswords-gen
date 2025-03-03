@@ -1,18 +1,20 @@
 import os
-from flask import Flask, request, render_template, jsonify, send_file, Response
+from flask import Flask, request, jsonify, send_file, Response
 from typing import Dict
 import base64
 import tomllib as toml
 from generator import CrosswordGenerator
 import json
 
-app = Flask(__name__, static_folder='../frontend/build')
+PROJECT_ROOT = os.getcwd()
+
+app = Flask(__name__, static_folder=f'{PROJECT_ROOT}/frontend/build')
 
 # Store generators by UUID
 generators: Dict[str, CrosswordGenerator] = {}
 
 # Load default configuration
-CONFIG_PATH = "config.toml"
+CONFIG_PATH = f"{PROJECT_ROOT}/config.toml"
 config = {}
 try:
     with open(CONFIG_PATH, "rb") as config_file:
@@ -45,7 +47,7 @@ def require_secret_key(f):
 
 
 # Ensure output directory exists
-OUTPUT_DIR = "output"
+OUTPUT_DIR = f"{PROJECT_ROOT}/output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -297,7 +299,7 @@ def download_pdf(client_id, pdf_type):
     if not os.path.exists(pdf_path):
         return "PDF not found", 404
 
-    return send_file("../"+pdf_path, as_attachment=True, download_name=filename)
+    return send_file(pdf_path, as_attachment=True, download_name=filename)
 
 
 @app.route('/api/cleanup', methods=['POST'])
