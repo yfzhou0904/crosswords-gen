@@ -337,7 +337,7 @@ def serve_frontend(path):
         return app.send_static_file('index.html')
 
 if __name__ == '__main__':
-    listen_addr = config.get("web", {}).get("listen_address", "0.0.0.0:80")
+    listen_addr = config.get("web", {}).get("listen_address", "127.0.0.1:80")
     host, port = listen_addr.split(":")
     port = int(port)
     app.run(host=host, port=port, debug=False)
