@@ -286,10 +286,10 @@ def download_pdf(client_id, pdf_type):
     temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
 
     if pdf_type == 'question':
-        pdf_path = f"{temp_output_dir}/crossword_puzzle.pdf"
+        pdf_path = f"../{temp_output_dir}/crossword_puzzle.pdf"
         filename = "crossword_puzzle.pdf"
     elif pdf_type == 'answer':
-        pdf_path = f"{temp_output_dir}/crossword_puzzle_answer.pdf"
+        pdf_path = f"../{temp_output_dir}/crossword_puzzle_answer.pdf"
         filename = "crossword_puzzle_answer.pdf"
     else:
         return "Invalid PDF type", 400
