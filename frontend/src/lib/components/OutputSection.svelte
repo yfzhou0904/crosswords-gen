@@ -57,7 +57,7 @@
 <style>
   .output-section {
     flex: 2;
-    min-width: 500px;
+    min-width: 300px;
   }
 
   .tab-content {
