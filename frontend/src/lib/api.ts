@@ -64,10 +64,11 @@ export async function exportPdf(secretKey: string): Promise<ExportPdfResponse> {
   return await response.json();
 }
 
-export async function cleanup(): Promise<void> {
+export async function cleanup(secretKey: string): Promise<void> {
   try {
     await fetch('/api/cleanup', {
       method: 'POST',
+      headers: getApiHeaders(secretKey),
       body: JSON.stringify({
         clientId
       }),

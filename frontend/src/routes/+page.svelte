@@ -129,8 +129,18 @@
 			const response = await exportPdf(secretKey);
 
 			if (response.success) {
-				window.open(response.questionPdfUrl, '_blank');
-				window.open(response.answerPdfUrl, '_blank');
+				const downloadFile = (url: string, filename: string) => {
+					const link = document.createElement('a');
+					link.href = url;
+					link.download = filename;
+					document.body.appendChild(link);
+					link.click();
+					document.body.removeChild(link);
+				};
+
+				if (response.questionPdfUrl) downloadFile(response.questionPdfUrl, 'question.pdf');
+				await new Promise((resolve) => setTimeout(resolve, 50));  // safari doesn't allow multiple downloads at once
+				if (response.answerPdfUrl) downloadFile(response.answerPdfUrl, 'answer.pdf');
 			} else {
 				alert(response.message || 'Failed to export PDFs.');
 			}
@@ -142,8 +152,8 @@
 		}
 	}
 
-	onMount(() => {
-		return cleanup;
+	onMount(() => () => {
+		cleanup(secretKey);
 	});
 </script>
 
