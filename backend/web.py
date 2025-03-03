@@ -286,10 +286,10 @@ def download_pdf(client_id, pdf_type):
     temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
 
     if pdf_type == 'question':
-        pdf_path = f"../{temp_output_dir}/crossword_puzzle.pdf"
+        pdf_path = f"{temp_output_dir}/crossword_puzzle.pdf"
         filename = "crossword_puzzle.pdf"
     elif pdf_type == 'answer':
-        pdf_path = f"../{temp_output_dir}/crossword_puzzle_answer.pdf"
+        pdf_path = f"{temp_output_dir}/crossword_puzzle_answer.pdf"
         filename = "crossword_puzzle_answer.pdf"
     else:
         return "Invalid PDF type", 400
@@ -297,7 +297,7 @@ def download_pdf(client_id, pdf_type):
     if not os.path.exists(pdf_path):
         return "PDF not found", 404
 
-    return send_file(pdf_path, as_attachment=True, download_name=filename)
+    return send_file("../"+pdf_path, as_attachment=True, download_name=filename)
 
 
 @app.route('/api/cleanup', methods=['POST'])
