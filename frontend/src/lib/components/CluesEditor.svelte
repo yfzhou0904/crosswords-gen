@@ -69,7 +69,7 @@
   }
 
   .clue-input {
-    width: 100%;
+    width: 95%;
     padding: 8px;
   }
 

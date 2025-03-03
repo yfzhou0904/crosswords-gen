@@ -139,7 +139,7 @@
 				};
 
 				if (response.questionPdfUrl) downloadFile(response.questionPdfUrl, 'question.pdf');
-				await new Promise((resolve) => setTimeout(resolve, 50));  // safari doesn't allow multiple downloads at once
+				await new Promise((resolve) => setTimeout(resolve, 50)); // safari doesn't allow multiple downloads at once
 				if (response.answerPdfUrl) downloadFile(response.answerPdfUrl, 'answer.pdf');
 			} else {
 				alert(response.message || 'Failed to export PDFs.');
@@ -201,6 +201,6 @@
 	.container {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 2.5rem;
+		gap: 2rem;
 	}
 </style>
