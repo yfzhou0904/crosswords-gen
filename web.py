@@ -6,7 +6,7 @@ import tomllib as toml
 from generator import CrosswordGenerator
 import json
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='frontend/build')
 
 # Store generators by UUID
 generators: Dict[str, CrosswordGenerator] = {}
@@ -49,13 +49,7 @@ OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-@app.route('/')
-def index():
-    """Render the main page."""
-    return render_template('index.html')
-
-
-@app.route('/generate_grid', methods=['POST'])
+@app.route('/api/generate_grid', methods=['POST'])
 @require_secret_key
 def generate_grid():
     """Generate a crossword grid from the provided words."""
@@ -123,45 +117,8 @@ def generate_grid():
     })
 
 
-@app.route('/generate_clues', methods=['POST'])
-@require_secret_key
-def generate_clues():
-    """Generate clues for the crossword using AI."""
-    data = request.json
-    client_id = data['clientId']
 
-    # verify requisite files (puzzle and answer image) were generated
-    temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
-    if not os.path.exists(f"{temp_output_dir}/crossword_puzzle_question.png"):
-        return jsonify({
-            'success': False,
-            'message': 'Question image not found. Please generate a grid first.'
-        })
-    if not os.path.exists(f"{temp_output_dir}/crossword_puzzle_answer.png"):
-        return jsonify({
-            'success': False,
-            'message': 'Answer image not found. Please generate a grid first.'
-        })
-
-    # Generate clues using API
-    api_address = config.get("api", {}).get("address")
-    api_secret = config.get("api", {}).get("secret")
-    model_id = config.get("api", {}).get("model_id")
-
-    if not api_address or not api_secret or not model_id:
-        return jsonify({
-            'success': False,
-            'message': 'API credentials not available. Check your config.toml file.'
-        })
-
-    # Start SSE stream for progress updates
-    return jsonify({
-        'success': True,
-        'message': 'Started clue generation'
-    })
-
-
-@app.route('/stream_clues', methods=['GET'])
+@app.route('/api/stream_clues', methods=['GET'])
 def stream_clues():
     """Stream clue generation progress using SSE."""
     client_id = request.args.get('clientId')
@@ -175,7 +132,9 @@ def stream_clues():
             }) + '\n\n'
         return Response(error_stream_secret(), mimetype='text/event-stream')
 
-    if client_id not in generators:
+    # verify requisite files (puzzle and answer image) were generated
+    temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
+    if not os.path.exists(f"{temp_output_dir}/crossword_puzzle_question.png") or not os.path.exists(f"{temp_output_dir}/crossword_puzzle_answer.png"):
         def error_stream_clientid():
             yield 'data: ' + json.dumps({
                 'error': 'No grid found. Please generate a grid first.'
@@ -240,7 +199,7 @@ def stream_clues():
     return Response(generate(), mimetype='text/event-stream')
 
 
-@app.route('/update_clues', methods=['POST'])
+@app.route('/api/update_clues', methods=['POST'])
 @require_secret_key
 def update_clues():
     """Update clues with user-edited versions."""
@@ -273,7 +232,7 @@ def update_clues():
     })
 
 
-@app.route('/export_pdf', methods=['POST'])
+@app.route('/api/export_pdf', methods=['POST'])
 @require_secret_key
 def export_pdf():
     """Create and return PDF files for the crossword."""
@@ -316,12 +275,12 @@ def export_pdf():
     return jsonify({
         'success': True,
         'message': 'PDFs created successfully',
-        'questionPdfUrl': f'/download_pdf/{client_id}/question',
-        'answerPdfUrl': f'/download_pdf/{client_id}/answer'
+        'questionPdfUrl': f'/api/download_pdf/{client_id}/question',
+        'answerPdfUrl': f'/api/download_pdf/{client_id}/answer'
     })
 
 
-@app.route('/download_pdf/<client_id>/<pdf_type>', methods=['GET'])
+@app.route('/api/download_pdf/<client_id>/<pdf_type>', methods=['GET'])
 def download_pdf(client_id, pdf_type):
     """Download the generated PDF files."""
     temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
@@ -341,7 +300,7 @@ def download_pdf(client_id, pdf_type):
     return send_file(pdf_path, as_attachment=True, download_name=filename)
 
 
-@app.route('/cleanup', methods=['POST'])
+@app.route('/api/cleanup', methods=['POST'])
 def cleanup():
     """Clean up resources for a client session."""
     data = request.json
@@ -360,7 +319,22 @@ def cleanup():
         'success': True,
         'message': 'Cleanup completed'
     })
+    
+# @app.route('/')
+# def index():
+#     """Render the main page."""
+#     return render_template('index.html')
 
+# Serve Svelte frontend (catch-all route)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path and (path.startswith('api') or '.' in path):
+        # Let Flask handle API routes and static files
+        return app.send_static_file(path)
+    else:
+        # For all other routes, serve index.html (SPA approach)
+        return app.send_static_file('index.html')
 
 if __name__ == '__main__':
     listen_addr = config.get("web", {}).get("listen_address", "0.0.0.0:80")

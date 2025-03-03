@@ -350,7 +350,7 @@
       button.disabled = true;
 
       try {
-        const response = await fetch('/generate_grid', {
+        const response = await fetch('/api/generate_grid', {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({
@@ -412,20 +412,6 @@
       button.disabled = true;
 
       try {
-        // Start clue generation
-        const response = await fetch('/generate_clues', {
-          method: 'POST',
-          headers: getApiHeaders(),
-          body: JSON.stringify({
-            clientId: clientId
-          }),
-        });
-
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.message || 'Failed to start clue generation.');
-        }
-
         // Show progress container
         progressContainer.style.display = 'block';
         progressFill.style.width = '0%';
@@ -433,7 +419,7 @@
 
         // Connect to SSE stream
         const secret = document.getElementById('secretInput').value;
-        const eventSource = new EventSource(`/stream_clues?clientId=${clientId}&secret=${encodeURIComponent(secret)}`);
+        const eventSource = new EventSource(`/api/stream_clues?clientId=${clientId}&secret=${encodeURIComponent(secret)}`);
 
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
@@ -524,7 +510,7 @@
       button.disabled = true;
 
       try {
-        const response = await fetch('/update_clues', {
+        const response = await fetch('/api/update_clues', {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({
@@ -564,7 +550,7 @@
       button.disabled = true;
 
       try {
-        const response = await fetch('/export_pdf', {
+        const response = await fetch('/api/export_pdf', {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({
@@ -596,7 +582,7 @@
      */
     async function handleCleanup() {
       try {
-        await fetch('/cleanup', {
+        await fetch('/api/cleanup', {
           method: 'POST',
           headers: getApiHeaders(),
           body: JSON.stringify({
