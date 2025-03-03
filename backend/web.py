@@ -6,7 +6,7 @@ import tomllib as toml
 from generator import CrosswordGenerator
 import json
 
-app = Flask(__name__, static_folder='frontend/build')
+app = Flask(__name__, static_folder='../frontend/build')
 
 # Store generators by UUID
 generators: Dict[str, CrosswordGenerator] = {}
