@@ -1,8 +1,8 @@
 services:
   crossword-gen:
-    image: crossword-gen:latest
+    image: ghcr.io/yfzhou0904/crosswords-gen:latest
     ports:
-      - "127.0.0.1:1088:80"
+      - "127.0.0.1:1080:80"
     volumes:
       - crossword-data:/app/data
     environment:
