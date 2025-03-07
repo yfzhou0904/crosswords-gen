@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import random
 from typing import List, Tuple, Dict
 import argparse
-import tomllib as toml
+from dotenv import load_dotenv
 import openai
 from PIL import Image, ImageDraw, ImageFont
 from pdf import create_crossword_pdf
@@ -357,19 +357,15 @@ def main():
     parser.add_argument("words", nargs="+", help="List of words to include in the crossword.")
     parser.add_argument("--max-attempts", type=int, default=30, help="Maximum number of attempts to generate a grid")
     parser.add_argument("--output-dir", default="output", help="Directory to save output files")
-    parser.add_argument("--config", default="config.toml", help="Path to configuration file")
     args = parser.parse_args()
 
-    # Read configuration
-    api_address = api_secret = model_id = None
-    try:
-        with open(args.config, "rb") as config_file:
-            config = toml.load(config_file)
-        api_address = config.get("api", {}).get("address")
-        api_secret = config.get("api", {}).get("secret")
-        model_id = config.get("api", {}).get("model_id")
-    except (toml.TOMLDecodeError, OSError) as e:
-        print(f"Error reading config file: {e}")
+    # Read configuration from environment variables
+    load_dotenv()
+    api_address = os.getenv("API_ADDRESS")
+    api_secret = os.getenv("API_SECRET")
+    model_id = os.getenv("MODEL_ID")
+    if not all([api_address, api_secret, model_id]):
+        print("Error: Missing required environment variables (API_ADDRESS, API_SECRET, MODEL_ID)")
 
     # Generate the crossword
     generator = CrosswordGenerator(args.words)

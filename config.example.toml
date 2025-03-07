@@ -5,4 +5,4 @@ model_id = "chatgpt-4o-latest"
 
 [web]
 listen_address = "127.0.0.1:80"
-secret = ["top-secret"]
+secrets = ["top-secret"]
