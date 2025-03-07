@@ -30,9 +30,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
             type=sha,format=short
+            type=raw,value=latest
+            type=raw,value={{date 'YYYYMMDD-HHmmss' tz='UTC'}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
