@@ -1,0 +1,16 @@
+services:
+  crossword-gen:
+    image: crossword-gen:latest
+    ports:
+      - "127.0.0.1:1088:80"
+    volumes:
+      - crossword-data:/app/data
+    environment:
+      - OPENAI_ADDRESS=${OPENAI_ADDRESS:-default-openai-address}
+      - OPENAI_SECRET=${OPENAI_SECRET:-default-openai-secret}
+      - MODEL_ID=${MODEL_ID:-default-model-id}
+      - WEB_LISTEN_ADDRESS=${WEB_LISTEN_ADDRESS:-0.0.0.0:80}
+      - WEB_SECRETS=${WEB_SECRETS:-default-web-secrets}
+    restart: on-failure
+volumes:
+  crossword-data:

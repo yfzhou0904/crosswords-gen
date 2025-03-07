@@ -2,7 +2,6 @@ import os
 from flask import Flask, request, jsonify, send_file, Response
 from typing import Dict
 import base64
-import tomllib as toml
 from generator import CrosswordGenerator
 import json
 import datetime
@@ -14,20 +13,23 @@ app = Flask(__name__, static_folder=f'{PROJECT_ROOT}/frontend/build')
 # Store generators by UUID
 generators: Dict[str, CrosswordGenerator] = {}
 
-# Load default configuration
-CONFIG_PATH = f"{PROJECT_ROOT}/config.toml"
-config = {}
-try:
-    with open(CONFIG_PATH, "rb") as config_file:
-        config = toml.load(config_file)
-except (toml.TOMLDecodeError, OSError) as e:
-    print(f"Error reading config file: {e}")
 
-# Verify secret keys are configured
-if not config.get("web", {}).get("secret", ""):
-    print("Warning: No secret keys configured in config.toml")
-    config["web"]["secret"] = []
-
+from dotenv import load_dotenv
+load_dotenv()
+openai_address = os.getenv("OPENAI_ADDRESS")
+openai_secret = os.getenv("OPENAI_SECRET")
+model_id = os.getenv("MODEL_ID")
+web_listen_address = os.getenv("WEB_LISTEN_ADDRESS")
+web_secrets = os.getenv("WEB_SECRETS").split(",")
+if not openai_address or not openai_secret or not model_id or not web_listen_address or not web_secrets:
+    raise ValueError("Missing required environment variables. Please check your configuration.")
+print(json.dumps({
+    "api_address": openai_address,
+    "api_secret": bool(openai_secret),
+    "model_id": model_id,
+    "web_listen_address": web_listen_address,
+    "web_secrets": web_secrets,
+}))
 
 def require_secret_key(f):
     """Decorator to verify X-Secret-Key header."""
@@ -36,9 +38,9 @@ def require_secret_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         secret_key = request.headers.get('X-Secret-Key')
-        if not secret_key or secret_key not in config["web"]["secret"]:
+        if not secret_key or secret_key not in web_secrets:
             print(
-                f"received secret {secret_key}, acceptable: {config["web"]["secret"]}")
+                f"received secret {secret_key}, acceptable: {web_secrets}")
             return jsonify({
                 'success': False,
                 'message': 'Invalid or missing X-Secret-Key header'
@@ -48,7 +50,7 @@ def require_secret_key(f):
 
 
 # Ensure output directory exists
-OUTPUT_DIR = f"{PROJECT_ROOT}/output"
+OUTPUT_DIR = f"{PROJECT_ROOT}/data/output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -129,7 +131,7 @@ def stream_clues():
     secret_key = request.args.get('secret')
 
     # Verify secret key
-    if not secret_key or secret_key not in config["web"]["secret"]:
+    if not secret_key or secret_key not in web_secrets:
         def error_stream_secret():
             yield 'data: ' + json.dumps({
                 'error': 'Invalid or missing secret key'
@@ -146,9 +148,6 @@ def stream_clues():
         return Response(error_stream_clientid(), mimetype='text/event-stream')
 
     generator = generators[client_id]
-    api_address = config.get("api", {}).get("address")
-    api_secret = config.get("api", {}).get("secret")
-    model_id = config.get("api", {}).get("model_id")
 
     def generate():
         try:
@@ -168,9 +167,9 @@ def stream_clues():
 
                     # Generate clue for current word
                     clue = generator.generate_single_clue(
-                        word, api_address, api_secret, model_id)
+                        word, openai_address, openai_secret, model_id)
                     generator.clues[direction][number] = clue
-                    
+
                     total_token_count += len(clue.split()) * 5
 
                     # Send progress update
@@ -189,9 +188,9 @@ def stream_clues():
 
             # Log clue generation info to file with timestamp
             log_message = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - stream_clues - Secret: {secret_key}, Total tokens: {total_token_count}, Cost: {total_token_count * PRICE_PER_TOKEN:.4f}"
-            with open("./clue_generation.log", "a", encoding="utf-8") as log_file:
+            with open("./data/clue_generation.log", "a", encoding="utf-8") as log_file:
                 log_file.write(log_message + "\n")
-            
+
             yield 'data: ' + json.dumps({
                 'complete': True,
                 'clues': {
@@ -343,7 +342,7 @@ def serve_frontend(path):
         return app.send_static_file('index.html')
 
 if __name__ == '__main__':
-    listen_addr = config.get("web", {}).get("listen_address", "127.0.0.1:80")
+    listen_addr = web_listen_address or "127.0.0.1:80"
     host, port = listen_addr.split(":")
     port = int(port)
     app.run(host=host, port=port, debug=False)
