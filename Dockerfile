@@ -25,7 +25,7 @@ RUN npm run build
 
 # Go back to app directory and copy the rest of the application
 WORKDIR /app
-COPY generator.py pdf.py web.py templates ./
+COPY generator.py pdf.py web.py ./
 COPY config.example.toml ./
 
 # Create output directory with proper permissions

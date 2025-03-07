@@ -5,6 +5,7 @@ import base64
 import tomllib as toml
 from generator import CrosswordGenerator
 import json
+import datetime
 
 PROJECT_ROOT = os.getcwd()
 
@@ -119,6 +120,7 @@ def generate_grid():
     })
 
 
+PRICE_PER_TOKEN = 7 * 1 * 1e-6 # gpt-4o price per token
 
 @app.route('/api/stream_clues', methods=['GET'])
 def stream_clues():
@@ -153,6 +155,7 @@ def stream_clues():
             total_words = len(
                 generator.clue_ids['across']) + len(generator.clue_ids['down'])
             current_word = 0
+            total_token_count = 0
 
             # Initialize clues dictionaries
             generator.clues = {'across': {}, 'down': {}}
@@ -167,6 +170,8 @@ def stream_clues():
                     clue = generator.generate_single_clue(
                         word, api_address, api_secret, model_id)
                     generator.clues[direction][number] = clue
+                    
+                    total_token_count += len(clue.split()) * 5
 
                     # Send progress update
                     yield 'data: ' + json.dumps({
@@ -182,7 +187,11 @@ def stream_clues():
             os.makedirs(temp_output_dir, exist_ok=True)
             generator.save_clues_text(temp_output_dir)
 
-            # Send completion message
+            # Log clue generation info to file with timestamp
+            log_message = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - stream_clues - Secret: {secret_key}, Total tokens: {total_token_count}, Cost: {total_token_count * PRICE_PER_TOKEN:.4f}"
+            with open("./clue_generation.log", "a", encoding="utf-8") as log_file:
+                log_file.write(log_message + "\n")
+            
             yield 'data: ' + json.dumps({
                 'complete': True,
                 'clues': {
@@ -321,11 +330,6 @@ def cleanup():
         'success': True,
         'message': 'Cleanup completed'
     })
-    
-# @app.route('/')
-# def index():
-#     """Render the main page."""
-#     return render_template('index.html')
 
 # Serve Svelte frontend (catch-all route)
 @app.route('/', defaults={'path': ''})
