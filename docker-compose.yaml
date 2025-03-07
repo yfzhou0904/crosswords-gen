@@ -1,6 +1,7 @@
 services:
   crossword-gen:
     image: ghcr.io/yfzhou0904/crosswords-gen:latest
+    container_name: crossword-gen
     ports:
       - "127.0.0.1:1080:80"
     volumes:
