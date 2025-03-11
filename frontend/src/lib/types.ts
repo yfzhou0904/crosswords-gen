@@ -39,3 +39,12 @@ export interface ExportPdfResponse {
   questionPdfUrl?: string;
   answerPdfUrl?: string;
 }
+
+export interface UserInfo {
+  ID: number;
+  name: string;
+  email?: string;
+  profile_image?: string;
+  last_active_ip?: string;
+  last_active?: string;
+}

@@ -5,7 +5,7 @@ export default defineConfig({
 	plugins: [sveltekit()],
 	server: {
     proxy: {
-      '/api': 'http://127.0.0.1:1084',
+      '/api': 'http://127.0.0.1:1080',
     },
   },
 });
