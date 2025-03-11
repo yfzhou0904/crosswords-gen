@@ -28,21 +28,24 @@
 	let progressText = '';
 
 	// Check if user is authenticated on mount
-	onMount(async () => {
-		try {
-			isCheckingAuth = true;
-			userInfo = await checkAuth();
-			isAuthenticated = !!userInfo?.is_authenticated;
-		} catch (error) {
-			console.error('Failed to check authentication:', error);
-		} finally {
-			isCheckingAuth = false;
-		}
-
-		// Return cleanup function
-		return () => {
-			cleanup(secretKey);
+	onMount(() => {
+		const checkAuthentication = async () => {
+			try {
+				isCheckingAuth = true;
+				userInfo = await checkAuth();
+				console.log(userInfo);
+				// Consider user authenticated if they have an ID
+				isAuthenticated = !!userInfo?.ID;
+			} catch (error) {
+				console.error('Failed to check authentication:', error);
+				userInfo = null;
+				isAuthenticated = false;
+			} finally {
+				isCheckingAuth = false;
+			}
 		};
+
+		checkAuthentication();
 	});
 
 	async function handleGenerateGrid() {

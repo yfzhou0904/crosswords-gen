@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UserInfo } from '$lib/types';
-	
+
 	export let secretKey = '';
 	export let words = '';
 	export let onGenerateGrid: () => void;
@@ -25,14 +25,19 @@
 		{:else if isAuthenticated}
 			<div class="auth-status">
 				<p>
-					Logged in as <strong>{userInfo?.display_name || userInfo?.username}</strong>
+					Logged in as <strong>{userInfo?.name || userInfo?.email}</strong>
 					<span class="auth-badge">✓</span>
+				</p>
+				<p>
+					You can log out <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener">here</a>
 				</p>
 			</div>
 		{:else}
 			<div class="auth-status">
 				<p>
-					Not logged in. You can <a href="https://auth.yfzhou.fyi/login" target="_blank" rel="noopener">sign in</a> 
+					Not logged in. You can <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener"
+						>sign in</a
+					>
 					or use a secret key:
 				</p>
 			</div>
@@ -60,7 +65,10 @@
 		{/if}
 	</button>
 
-	<button on:click={onGenerateClues} disabled={!gridGenerated || isGeneratingClues || (!isAuthenticated && !secretKey)}>
+	<button
+		on:click={onGenerateClues}
+		disabled={!gridGenerated || isGeneratingClues || (!isAuthenticated && !secretKey)}
+	>
 		{#if isGeneratingClues}
 			<span class="spinner"></span> Generating...
 		{:else}
@@ -68,7 +76,10 @@
 		{/if}
 	</button>
 
-	<button on:click={onExportPdf} disabled={!cluesGenerated || isExportingPdf || (!isAuthenticated && !secretKey)}>
+	<button
+		on:click={onExportPdf}
+		disabled={!cluesGenerated || isExportingPdf || (!isAuthenticated && !secretKey)}
+	>
 		{#if isExportingPdf}
 			<span class="spinner"></span> Exporting...
 		{:else}

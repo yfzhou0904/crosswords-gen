@@ -41,10 +41,10 @@ export interface ExportPdfResponse {
 }
 
 export interface UserInfo {
-  user_id: string;
-  username: string;
+  ID: number;
+  name: string;
   email?: string;
-  display_name?: string;
-  is_authenticated: boolean;
-  roles?: string[];
+  profile_image?: string;
+  last_active_ip?: string;
+  last_active?: string;
 }

@@ -42,7 +42,7 @@ export async function generateGrid(words: string, secretKey?: string): Promise<G
 export function streamClues(secretKey?: string): EventSource {
   // Include the secret key in query params as a fallback if provided
   const secretParam = secretKey ? `&secret=${encodeURIComponent(secretKey)}` : '';
-  return new EventSource(`/api/stream_clues?clientId=${clientId}${secretParam}`);
+  return new EventSource(`/api/stream_clues?clientId=${clientId}${secretParam}`, { withCredentials: true });
 }
 
 export async function updateClues(clues: CluesData, secretKey?: string): Promise<UpdateCluesResponse> {
