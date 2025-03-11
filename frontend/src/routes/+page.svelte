@@ -3,8 +3,8 @@
 	import { onMount } from 'svelte';
 	import InputSection from '$lib/components/InputSection.svelte';
 	import OutputSection from '$lib/components/OutputSection.svelte';
-	import { generateGrid, streamClues, updateClues, exportPdf, cleanup } from '$lib/api';
-	import type { CluesData } from '$lib/types';
+	import { generateGrid, streamClues, updateClues, exportPdf, cleanup, checkAuth } from '$lib/api';
+	import type { CluesData, UserInfo } from '$lib/types';
 
 	let secretKey = '';
 	let words = '';
@@ -13,6 +13,9 @@
 	let cluesData: CluesData | null = null;
 	let gridGenerated = false;
 	let cluesGenerated = false;
+	let userInfo: UserInfo | null = null;
+	let isAuthenticated = false;
+	let isCheckingAuth = true;
 
 	// Loading states
 	let isGeneratingGrid = false;
@@ -24,6 +27,24 @@
 	let progressValue = 0;
 	let progressText = '';
 
+	// Check if user is authenticated on mount
+	onMount(async () => {
+		try {
+			isCheckingAuth = true;
+			userInfo = await checkAuth();
+			isAuthenticated = !!userInfo?.is_authenticated;
+		} catch (error) {
+			console.error('Failed to check authentication:', error);
+		} finally {
+			isCheckingAuth = false;
+		}
+
+		// Return cleanup function
+		return () => {
+			cleanup(secretKey);
+		};
+	});
+
 	async function handleGenerateGrid() {
 		if (!words.trim()) {
 			alert('Please enter at least one word.');
@@ -32,7 +53,8 @@
 
 		try {
 			isGeneratingGrid = true;
-			const data = await generateGrid(words, secretKey);
+			// Use auth cookie if authenticated, fallback to secret key if provided
+			const data = await generateGrid(words, isAuthenticated ? undefined : secretKey);
 
 			if (data.success) {
 				gridImage = 'data:image/png;base64,' + data.questionImage;
@@ -57,7 +79,8 @@
 			progressValue = 0;
 			progressText = 'Starting clue generation...';
 
-			const eventSource = streamClues(secretKey);
+			// Use auth cookie if authenticated, fallback to secret key if provided
+			const eventSource = streamClues(isAuthenticated ? undefined : secretKey);
 
 			eventSource.onmessage = (event) => {
 				const data = JSON.parse(event.data);
@@ -109,7 +132,8 @@
 		if (!cluesData) return;
 
 		try {
-			const response = await updateClues(cluesData, secretKey);
+			// Use auth cookie if authenticated, fallback to secret key if provided
+			const response = await updateClues(cluesData, isAuthenticated ? undefined : secretKey);
 
 			if (response.success) {
 				alert('Clues updated successfully.');
@@ -126,7 +150,8 @@
 	async function handleExportPdf() {
 		try {
 			isExportingPdf = true;
-			const response = await exportPdf(secretKey);
+			// Use auth cookie if authenticated, fallback to secret key if provided
+			const response = await exportPdf(isAuthenticated ? undefined : secretKey);
 
 			if (response.success) {
 				const downloadFile = (url: string, filename: string) => {
@@ -151,10 +176,6 @@
 			isExportingPdf = false;
 		}
 	}
-
-	onMount(() => () => {
-		cleanup(secretKey);
-	});
 </script>
 
 <svelte:head>
@@ -173,6 +194,9 @@
 			{isGeneratingGrid}
 			{isGeneratingClues}
 			{isExportingPdf}
+			{isAuthenticated}
+			{isCheckingAuth}
+			{userInfo}
 			onGenerateGrid={handleGenerateGrid}
 			onGenerateClues={handleGenerateClues}
 			onExportPdf={handleExportPdf}

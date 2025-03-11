@@ -5,6 +5,7 @@ import base64
 from generator import CrosswordGenerator
 import json
 import datetime
+import requests
 
 PROJECT_ROOT = os.getcwd()
 
@@ -21,32 +22,63 @@ openai_secret = os.getenv("OPENAI_SECRET")
 model_id = os.getenv("MODEL_ID")
 web_listen_address = os.getenv("WEB_LISTEN_ADDRESS")
 web_secrets = os.getenv("WEB_SECRETS").split(",")
-if not openai_address or not openai_secret or not model_id or not web_listen_address or not web_secrets:
+auth_api_url = os.getenv("AUTH_API_URL", "https://auth.yfzhou.fyi/auth/user")
+if not openai_address or not openai_secret or not model_id or not web_listen_address:
     raise ValueError("Missing required environment variables. Please check your configuration.")
 print(json.dumps({
     "api_address": openai_address,
     "api_secret": bool(openai_secret),
     "model_id": model_id,
     "web_listen_address": web_listen_address,
-    "web_secrets": web_secrets,
+    "auth_api_url": auth_api_url,
 }))
 
-def require_secret_key(f):
-    """Decorator to verify X-Secret-Key header."""
+def verify_auth_token(auth_token):
+    """Verify auth token with the auth API"""
+    try:
+        response = requests.get(
+            auth_api_url,
+            cookies={"auth_token": auth_token},
+            timeout=5
+        )
+        if response.status_code == 200:
+            return True, response.json()
+        return False, None
+    except Exception as e:
+        print(f"Error verifying auth token: {e}")
+        return False, None
+
+def require_auth(f):
+    """Decorator to verify auth_token cookie or fallback to X-Secret-Key header."""
     from functools import wraps
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        secret_key = request.headers.get('X-Secret-Key')
-        if not secret_key or secret_key not in web_secrets:
-            print(
-                f"received secret {secret_key}, acceptable: {web_secrets}")
-            return jsonify({
-                'success': False,
-                'message': 'Invalid or missing X-Secret-Key header'
-            }), 401
-        return f(*args, **kwargs)
+        # First try the auth_token cookie
+        auth_token = request.cookies.get('auth_token')
+        if auth_token:
+            is_valid, user_info = verify_auth_token(auth_token)
+            if is_valid:
+                # Add user info to request object for later use if needed
+                request.user_info = user_info
+                return f(*args, **kwargs)
+        
+        # Fallback to secret key for backward compatibility
+        if web_secrets:
+            secret_key = request.headers.get('X-Secret-Key')
+            if secret_key and secret_key in web_secrets:
+                return f(*args, **kwargs)
+        
+        return jsonify({
+            'success': False,
+            'message': 'Authentication required'
+        }), 401
     return decorated_function
+
+# Legacy decorator for backward compatibility - will be deprecated
+def require_secret_key(f):
+    """Decorator to verify X-Secret-Key header."""
+    return require_auth(f)
 
 
 # Ensure output directory exists
@@ -128,15 +160,27 @@ PRICE_PER_TOKEN = 7 * 1 * 1e-6 # gpt-4o price per token
 def stream_clues():
     """Stream clue generation progress using SSE."""
     client_id = request.args.get('clientId')
-    secret_key = request.args.get('secret')
-
-    # Verify secret key
-    if not secret_key or secret_key not in web_secrets:
-        def error_stream_secret():
+    
+    # Verify auth (check cookie first, then fallback to secret key param)
+    is_authenticated = False
+    auth_token = request.cookies.get('auth_token')
+    if auth_token:
+        is_valid, user_info = verify_auth_token(auth_token)
+        if is_valid:
+            is_authenticated = True
+    
+    # Fallback to secret key for backward compatibility
+    if not is_authenticated and web_secrets:
+        secret_key = request.args.get('secret')
+        if secret_key and secret_key in web_secrets:
+            is_authenticated = True
+    
+    if not is_authenticated:
+        def error_stream_auth():
             yield 'data: ' + json.dumps({
-                'error': 'Invalid or missing secret key'
+                'error': 'Authentication required'
             }) + '\n\n'
-        return Response(error_stream_secret(), mimetype='text/event-stream')
+        return Response(error_stream_auth(), mimetype='text/event-stream')
 
     # verify requisite files (puzzle and answer image) were generated
     temp_output_dir = os.path.join(OUTPUT_DIR, client_id)
@@ -187,7 +231,11 @@ def stream_clues():
             generator.save_clues_text(temp_output_dir)
 
             # Log clue generation info to file with timestamp
-            log_message = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - stream_clues - Secret: {secret_key}, Total tokens: {total_token_count}, Cost: {total_token_count * PRICE_PER_TOKEN:.4f}"
+            auth_method = "cookie" if request.cookies.get('auth_token') else "secret_key"
+            user_info = getattr(request, 'user_info', {})
+            user_id = user_info.get('user_id', 'anonymous') if auth_method == "cookie" else "secret_key"
+            
+            log_message = f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - stream_clues - Auth: {auth_method}, User: {user_id}, Total tokens: {total_token_count}, Cost: {total_token_count * PRICE_PER_TOKEN:.4f}"
             with open("./data/clue_generation.log", "a", encoding="utf-8") as log_file:
                 log_file.write(log_message + "\n")
 

@@ -39,3 +39,12 @@ export interface ExportPdfResponse {
   questionPdfUrl?: string;
   answerPdfUrl?: string;
 }
+
+export interface UserInfo {
+  user_id: string;
+  username: string;
+  email?: string;
+  display_name?: string;
+  is_authenticated: boolean;
+  roles?: string[];
+}

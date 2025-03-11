@@ -5,4 +5,7 @@ model_id = "chatgpt-4o-latest"
 
 [web]
 listen_address = "127.0.0.1:80"
+# Legacy secret keys for backward compatibility (optional)
 secrets = ["top-secret"]
+# Auth API URL for user authentication
+auth_api_url = "https://auth.yfzhou.fyi/auth/user"

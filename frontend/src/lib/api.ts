@@ -1,5 +1,5 @@
 // src/lib/api.ts
-import type { CluesData, GridGenerationResponse, UpdateCluesResponse, ExportPdfResponse } from './types';
+import type { CluesData, GridGenerationResponse, UpdateCluesResponse, ExportPdfResponse, UserInfo } from './types';
 
 export function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -11,17 +11,20 @@ export function generateUUID(): string {
 
 export const clientId = generateUUID();
 
-export function getApiHeaders(secretKey: string): HeadersInit {
-  if (!secretKey) {
-    throw new Error('Secret key is required');
-  }
-  return {
-    'Content-Type': 'application/json',
-    'X-Secret-Key': secretKey
+export function getApiHeaders(secretKey?: string): HeadersInit {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json'
   };
+
+  // Add the secret key as a fallback if provided
+  if (secretKey) {
+    headers['X-Secret-Key'] = secretKey;
+  }
+
+  return headers;
 }
 
-export async function generateGrid(words: string, secretKey: string): Promise<GridGenerationResponse> {
+export async function generateGrid(words: string, secretKey?: string): Promise<GridGenerationResponse> {
   const response = await fetch('/api/generate_grid', {
     method: 'POST',
     headers: getApiHeaders(secretKey),
@@ -30,16 +33,19 @@ export async function generateGrid(words: string, secretKey: string): Promise<Gr
       clientId,
       maxAttempts: 30
     }),
+    credentials: 'include', // Include cookies in the request
   });
 
   return await response.json();
 }
 
-export function streamClues(secretKey: string): EventSource {
-  return new EventSource(`/api/stream_clues?clientId=${clientId}&secret=${encodeURIComponent(secretKey)}`);
+export function streamClues(secretKey?: string): EventSource {
+  // Include the secret key in query params as a fallback if provided
+  const secretParam = secretKey ? `&secret=${encodeURIComponent(secretKey)}` : '';
+  return new EventSource(`/api/stream_clues?clientId=${clientId}${secretParam}`);
 }
 
-export async function updateClues(clues: CluesData, secretKey: string): Promise<UpdateCluesResponse> {
+export async function updateClues(clues: CluesData, secretKey?: string): Promise<UpdateCluesResponse> {
   const response = await fetch('/api/update_clues', {
     method: 'POST',
     headers: getApiHeaders(secretKey),
@@ -47,24 +53,26 @@ export async function updateClues(clues: CluesData, secretKey: string): Promise<
       clientId,
       clues
     }),
+    credentials: 'include', // Include cookies in the request
   });
 
   return await response.json();
 }
 
-export async function exportPdf(secretKey: string): Promise<ExportPdfResponse> {
+export async function exportPdf(secretKey?: string): Promise<ExportPdfResponse> {
   const response = await fetch('/api/export_pdf', {
     method: 'POST',
     headers: getApiHeaders(secretKey),
     body: JSON.stringify({
       clientId
     }),
+    credentials: 'include', // Include cookies in the request
   });
 
   return await response.json();
 }
 
-export async function cleanup(secretKey: string): Promise<void> {
+export async function cleanup(secretKey?: string): Promise<void> {
   try {
     await fetch('/api/cleanup', {
       method: 'POST',
@@ -72,9 +80,28 @@ export async function cleanup(secretKey: string): Promise<void> {
       body: JSON.stringify({
         clientId
       }),
+      credentials: 'include', // Include cookies in the request
       keepalive: true
     });
   } catch (error) {
     console.error('Error during cleanup:', error);
+  }
+}
+
+// Function to check if the user is authenticated
+export async function checkAuth(): Promise<UserInfo | null> {
+  try {
+    const response = await fetch('https://auth.yfzhou.fyi/auth/user', {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error checking authentication:', error);
+    return null;
   }
 }
