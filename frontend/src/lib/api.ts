@@ -11,23 +11,16 @@ export function generateUUID(): string {
 
 export const clientId = generateUUID();
 
-export function getApiHeaders(secretKey?: string): HeadersInit {
-  const headers: HeadersInit = {
+export function getApiHeaders(): HeadersInit {
+  return {
     'Content-Type': 'application/json'
   };
-
-  // Add the secret key as a fallback if provided
-  if (secretKey) {
-    headers['X-Secret-Key'] = secretKey;
-  }
-
-  return headers;
 }
 
-export async function generateGrid(words: string, secretKey?: string): Promise<GridGenerationResponse> {
+export async function generateGrid(words: string): Promise<GridGenerationResponse> {
   const response = await fetch('/api/generate_grid', {
     method: 'POST',
-    headers: getApiHeaders(secretKey),
+    headers: getApiHeaders(),
     body: JSON.stringify({
       words,
       clientId,
@@ -39,16 +32,14 @@ export async function generateGrid(words: string, secretKey?: string): Promise<G
   return await response.json();
 }
 
-export function streamClues(secretKey?: string): EventSource {
-  // Include the secret key in query params as a fallback if provided
-  const secretParam = secretKey ? `&secret=${encodeURIComponent(secretKey)}` : '';
-  return new EventSource(`/api/stream_clues?clientId=${clientId}${secretParam}`, { withCredentials: true });
+export function streamClues(): EventSource {
+  return new EventSource(`/api/stream_clues?clientId=${clientId}`, { withCredentials: true });
 }
 
-export async function updateClues(clues: CluesData, secretKey?: string): Promise<UpdateCluesResponse> {
+export async function updateClues(clues: CluesData): Promise<UpdateCluesResponse> {
   const response = await fetch('/api/update_clues', {
     method: 'POST',
-    headers: getApiHeaders(secretKey),
+    headers: getApiHeaders(),
     body: JSON.stringify({
       clientId,
       clues
@@ -59,10 +50,10 @@ export async function updateClues(clues: CluesData, secretKey?: string): Promise
   return await response.json();
 }
 
-export async function exportPdf(secretKey?: string): Promise<ExportPdfResponse> {
+export async function exportPdf(): Promise<ExportPdfResponse> {
   const response = await fetch('/api/export_pdf', {
     method: 'POST',
-    headers: getApiHeaders(secretKey),
+    headers: getApiHeaders(),
     body: JSON.stringify({
       clientId
     }),
@@ -72,11 +63,11 @@ export async function exportPdf(secretKey?: string): Promise<ExportPdfResponse> 
   return await response.json();
 }
 
-export async function cleanup(secretKey?: string): Promise<void> {
+export async function cleanup(): Promise<void> {
   try {
     await fetch('/api/cleanup', {
       method: 'POST',
-      headers: getApiHeaders(secretKey),
+      headers: getApiHeaders(),
       body: JSON.stringify({
         clientId
       }),

@@ -21,7 +21,6 @@ openai_address = os.getenv("OPENAI_ADDRESS")
 openai_secret = os.getenv("OPENAI_SECRET")
 model_id = os.getenv("MODEL_ID")
 web_listen_address = os.getenv("WEB_LISTEN_ADDRESS")
-web_secrets = os.getenv("WEB_SECRETS").split(",")
 auth_api_url = os.getenv("AUTH_API_URL", "https://auth.yfzhou.fyi/auth/user")
 if not openai_address or not openai_secret or not model_id or not web_listen_address:
     raise ValueError(
@@ -52,12 +51,12 @@ def verify_auth_token(auth_token):
 
 
 def require_auth(f):
-    """Decorator to verify auth_token cookie or fallback to X-Secret-Key header."""
+    """Decorator to verify auth_token cookie."""
     from functools import wraps
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # First try the auth_token cookie
+        # Verify the auth_token cookie
         auth_token = request.cookies.get('auth_token')
         if auth_token:
             is_valid, user_info = verify_auth_token(auth_token)
@@ -66,24 +65,11 @@ def require_auth(f):
                 request.user_info = user_info
                 return f(*args, **kwargs)
 
-        # Fallback to secret key for backward compatibility
-        if web_secrets:
-            secret_key = request.headers.get('X-Secret-Key')
-            if secret_key and secret_key in web_secrets:
-                return f(*args, **kwargs)
-
         return jsonify({
             'success': False,
             'message': 'Authentication required'
         }), 401
     return decorated_function
-
-# Legacy decorator for backward compatibility - will be deprecated
-
-
-def require_secret_key(f):
-    """Decorator to verify X-Secret-Key header."""
-    return require_auth(f)
 
 
 # Ensure output directory exists
@@ -92,7 +78,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 @app.route('/api/generate_grid', methods=['POST'])
-@require_secret_key
+@require_auth
 def generate_grid():
     """Generate a crossword grid from the provided words."""
     data = request.json
@@ -167,7 +153,7 @@ def stream_clues():
     """Stream clue generation progress using SSE."""
     client_id = request.args.get('clientId')
 
-    # Verify auth (check cookie first, then fallback to secret key param)
+    # Verify auth using only the auth_token cookie
     user_info = {}
     is_authenticated = False
     auth_token = request.cookies.get('auth_token')
@@ -175,13 +161,6 @@ def stream_clues():
         is_valid, user_info = verify_auth_token(auth_token)
         if is_valid:
             is_authenticated = True
-
-    # Fallback to secret key for backward compatibility
-    if not is_authenticated and web_secrets:
-        secret_key = request.args.get('secret')
-        if secret_key and secret_key in web_secrets:
-            is_authenticated = True
-            user_info['name'] = secret_key
 
     if not is_authenticated:
         def error_stream_auth():
@@ -262,7 +241,7 @@ def stream_clues():
 
 
 @app.route('/api/update_clues', methods=['POST'])
-@require_secret_key
+@require_auth
 def update_clues():
     """Update clues with user-edited versions."""
     data = request.json
@@ -295,7 +274,7 @@ def update_clues():
 
 
 @app.route('/api/export_pdf', methods=['POST'])
-@require_secret_key
+@require_auth
 def export_pdf():
     """Create and return PDF files for the crossword."""
     data = request.json
