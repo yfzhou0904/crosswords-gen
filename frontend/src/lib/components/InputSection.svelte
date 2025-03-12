@@ -28,15 +28,13 @@
 					<span class="auth-badge">✓</span>
 				</p>
 				<p>
-					You can log out <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener">here</a>
+					You can log out <a href="https://auth.yfzhou.fyi">here</a>
 				</p>
 			</div>
 		{:else}
 			<div class="auth-status">
 				<p>
-					Authentication required. Please <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener"
-						>sign in</a
-					> to use this application.
+					Authentication required. Please <a href="https://auth.yfzhou.fyi">sign in</a> to use this application.
 				</p>
 			</div>
 		{/if}
@@ -66,10 +64,7 @@
 		{/if}
 	</button>
 
-	<button
-		on:click={onExportPdf}
-		disabled={!cluesGenerated || isExportingPdf || !isAuthenticated}
-	>
+	<button on:click={onExportPdf} disabled={!cluesGenerated || isExportingPdf || !isAuthenticated}>
 		{#if isExportingPdf}
 			<span class="spinner"></span> Exporting...
 		{:else}
