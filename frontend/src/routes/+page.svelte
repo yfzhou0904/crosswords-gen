@@ -34,7 +34,7 @@
 				userInfo = await checkAuth();
 				console.log(userInfo);
 				// Consider user authenticated if they have an ID
-				isAuthenticated = !!userInfo?.ID;
+				isAuthenticated = !!userInfo?.id;
 			} catch (error) {
 				console.error('Failed to check authentication:', error);
 				userInfo = null;

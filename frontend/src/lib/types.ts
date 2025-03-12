@@ -41,7 +41,7 @@ export interface ExportPdfResponse {
 }
 
 export interface UserInfo {
-  ID: number;
+  id: number;
   name: string;
   email?: string;
   profile_image?: string;
