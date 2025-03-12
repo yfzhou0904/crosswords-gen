@@ -28,7 +28,7 @@
 					<span class="auth-badge">✓</span>
 				</p>
 				<p>
-					You can log out <a href="https://auth.yfzhou.fyi">here</a>
+					You can log out <a href="https://auth.yfzhou.fyi/?redirect={encodeURIComponent(window.location.href)}">here</a>
 				</p>
 			</div>
 		{:else}
