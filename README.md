@@ -28,8 +28,8 @@ The application supports two authentication methods:
 For authentication configuration, update your `.env` file:
 
 ```
-# Auth API URL (default: https://auth.yfzhou.fyi/auth/user)
-AUTH_API_URL=https://auth.yfzhou.fyi/auth/user
+# Auth API URL (default: https://auth.yfzhou.fyi/webapi/user)
+AUTH_API_URL=https://auth.yfzhou.fyi/webapi/user
 
 # Legacy secret keys (comma-separated list) - optional for backward compatibility
 WEB_SECRETS=your-secret-key

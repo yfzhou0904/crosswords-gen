@@ -21,7 +21,7 @@ openai_address = os.getenv("OPENAI_ADDRESS")
 openai_secret = os.getenv("OPENAI_SECRET")
 model_id = os.getenv("MODEL_ID")
 web_listen_address = os.getenv("WEB_LISTEN_ADDRESS")
-auth_api_url = os.getenv("AUTH_API_URL", "https://auth.yfzhou.fyi/auth/user")
+auth_api_url = os.getenv("AUTH_API_URL", "https://auth.yfzhou.fyi/webapi/user")
 if not openai_address or not openai_secret or not model_id or not web_listen_address:
     raise ValueError(
         "Missing required environment variables. Please check your configuration.")

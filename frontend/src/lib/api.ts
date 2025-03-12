@@ -82,7 +82,7 @@ export async function cleanup(): Promise<void> {
 // Function to check if the user is authenticated
 export async function checkAuth(): Promise<UserInfo | null> {
   try {
-    const response = await fetch('https://auth.yfzhou.fyi/auth/user', {
+    const response = await fetch('https://auth.yfzhou.fyi/webapi/user', {
       method: 'GET',
       credentials: 'include',
     });

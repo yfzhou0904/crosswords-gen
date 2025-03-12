@@ -34,7 +34,7 @@
 		{:else}
 			<div class="auth-status">
 				<p>
-					Authentication required. Please <a href="https://auth.yfzhou.fyi">sign in</a> to use this application.
+					Authentication required. Please <a href="https://auth.yfzhou.fyi/?redirect={encodeURIComponent(window.location.href)}">sign in</a> to use this application.
 				</p>
 			</div>
 		{/if}
