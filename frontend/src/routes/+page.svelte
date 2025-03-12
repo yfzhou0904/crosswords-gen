@@ -6,7 +6,6 @@
 	import { generateGrid, streamClues, updateClues, exportPdf, cleanup, checkAuth } from '$lib/api';
 	import type { CluesData, UserInfo } from '$lib/types';
 
-	let secretKey = '';
 	let words = '';
 	let gridImage = '';
 	let answerImage = '';
@@ -56,8 +55,7 @@
 
 		try {
 			isGeneratingGrid = true;
-			// Use auth cookie if authenticated, fallback to secret key if provided
-			const data = await generateGrid(words, isAuthenticated ? undefined : secretKey);
+			const data = await generateGrid(words);
 
 			if (data.success) {
 				gridImage = 'data:image/png;base64,' + data.questionImage;
@@ -82,8 +80,7 @@
 			progressValue = 0;
 			progressText = 'Starting clue generation...';
 
-			// Use auth cookie if authenticated, fallback to secret key if provided
-			const eventSource = streamClues(isAuthenticated ? undefined : secretKey);
+			const eventSource = streamClues();
 
 			eventSource.onmessage = (event) => {
 				const data = JSON.parse(event.data);
@@ -135,8 +132,7 @@
 		if (!cluesData) return;
 
 		try {
-			// Use auth cookie if authenticated, fallback to secret key if provided
-			const response = await updateClues(cluesData, isAuthenticated ? undefined : secretKey);
+			const response = await updateClues(cluesData);
 
 			if (response.success) {
 				alert('Clues updated successfully.');
@@ -153,8 +149,7 @@
 	async function handleExportPdf() {
 		try {
 			isExportingPdf = true;
-			// Use auth cookie if authenticated, fallback to secret key if provided
-			const response = await exportPdf(isAuthenticated ? undefined : secretKey);
+			const response = await exportPdf();
 
 			if (response.success) {
 				const downloadFile = (url: string, filename: string) => {
@@ -190,7 +185,6 @@
 
 	<div class="container">
 		<InputSection
-			bind:secretKey
 			bind:words
 			{gridGenerated}
 			{cluesGenerated}

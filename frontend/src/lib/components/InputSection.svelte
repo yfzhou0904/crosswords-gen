@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { UserInfo } from '$lib/types';
 
-	export let secretKey = '';
 	export let words = '';
 	export let onGenerateGrid: () => void;
 	export let onGenerateClues: () => void;
@@ -29,26 +28,15 @@
 					<span class="auth-badge">✓</span>
 				</p>
 				<p>
-					You can log out <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener">here</a>
+					You can log out <a href="https://auth.yfzhou.fyi">here</a>
 				</p>
 			</div>
 		{:else}
 			<div class="auth-status">
 				<p>
-					Not logged in. You can <a href="https://auth.yfzhou.fyi" target="_blank" rel="noopener"
-						>sign in</a
-					>
-					or use a secret key:
+					Authentication required. Please <a href="https://auth.yfzhou.fyi">sign in</a> to use this application.
 				</p>
 			</div>
-			<label for="secretInput">Secret Key:</label>
-			<input
-				type="password"
-				id="secretInput"
-				placeholder="Enter secret key"
-				bind:value={secretKey}
-				style="padding: 8px; width: 98%; margin-top: 5px;"
-			/>
 		{/if}
 	</div>
 	<h2>Input Words</h2>
@@ -57,7 +45,7 @@
 	></textarea>
 
 	<!-- Action Buttons -->
-	<button on:click={onGenerateGrid} disabled={isGeneratingGrid || (!isAuthenticated && !secretKey)}>
+	<button on:click={onGenerateGrid} disabled={isGeneratingGrid || !isAuthenticated}>
 		{#if isGeneratingGrid}
 			<span class="spinner"></span> Generating...
 		{:else}
@@ -67,7 +55,7 @@
 
 	<button
 		on:click={onGenerateClues}
-		disabled={!gridGenerated || isGeneratingClues || (!isAuthenticated && !secretKey)}
+		disabled={!gridGenerated || isGeneratingClues || !isAuthenticated}
 	>
 		{#if isGeneratingClues}
 			<span class="spinner"></span> Generating...
@@ -76,10 +64,7 @@
 		{/if}
 	</button>
 
-	<button
-		on:click={onExportPdf}
-		disabled={!cluesGenerated || isExportingPdf || (!isAuthenticated && !secretKey)}
-	>
+	<button on:click={onExportPdf} disabled={!cluesGenerated || isExportingPdf || !isAuthenticated}>
 		{#if isExportingPdf}
 			<span class="spinner"></span> Exporting...
 		{:else}
