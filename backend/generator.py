@@ -255,6 +255,7 @@ class CrosswordGenerator:
                 ]
             )
             clue = response.choices[0].message.content.strip()
+            clue = clue.replace('<', '').replace('>', '')
             print(f"Generated clue for {word}: {clue}")
             return clue
         except (openai.APIError, openai.APIConnectionError, openai.RateLimitError) as e:
