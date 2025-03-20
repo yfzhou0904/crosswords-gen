@@ -187,6 +187,9 @@ def stream_clues():
             current_word = 0
             total_token_count = 0
 
+            topic = generator.analyze_topic(
+                openai_address, openai_secret, model_id)
+
             # Initialize clues dictionaries
             generator.clues = {'across': {}, 'down': {}}
 
@@ -198,7 +201,7 @@ def stream_clues():
 
                     # Generate clue for current word
                     clue = generator.generate_single_clue(
-                        word, openai_address, openai_secret, model_id)
+                        topic, word, openai_address, openai_secret, model_id)
                     generator.clues[direction][number] = clue
 
                     total_token_count += len(clue.split()) * 5
