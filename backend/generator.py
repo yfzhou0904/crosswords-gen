@@ -100,11 +100,13 @@ class CrosswordGenerator:
 
                     # Calculate new position
                     if target_dir == 'vertical':
-                        new_row = pw_row - idx_new if pw_dir == 'horizontal' else pw_row + (idx_placed - idx_new)
+                        new_row = pw_row - idx_new if pw_dir == 'horizontal' else pw_row + \
+                            (idx_placed - idx_new)
                         new_col = pw_col + idx_placed if pw_dir == 'horizontal' else pw_col
                     else:
                         new_row = pw_row + idx_placed if pw_dir == 'vertical' else pw_row
-                        new_col = pw_col - idx_new if pw_dir == 'vertical' else pw_col + (idx_placed - idx_new)
+                        new_col = pw_col - idx_new if pw_dir == 'vertical' else pw_col + \
+                            (idx_placed - idx_new)
 
                     if self.can_place(word, new_row, new_col, target_dir):
                         self.place_word(word, new_row, new_col, target_dir)
@@ -126,7 +128,8 @@ class CrosswordGenerator:
             self.clue_ids = {'across': {}, 'down': {}}
 
             # Sort words by length (longest first) with some randomization
-            sorted_words = sorted(self.words, key=lambda x: (-len(x), random.random()))
+            sorted_words = sorted(
+                self.words, key=lambda x: (-len(x), random.random()))
 
             if not sorted_words:
                 return False
@@ -151,7 +154,8 @@ class CrosswordGenerator:
                     best_overlap_count = self.overlap_count
                     best_clues = dict(self.clue_ids)
 
-            print(f"Attempt {attempt + 1} of {max_attempts}: {self.overlap_count} overlaps")
+            print(
+                f"Attempt {attempt + 1} of {max_attempts}: {self.overlap_count} overlaps")
 
         # Use the best grid found
         if best_grid is not None:
@@ -198,15 +202,35 @@ class CrosswordGenerator:
 
     def generate_clues(self, base_url: str, api_key: str, model_id: str) -> None:
         """Generate clues for the crossword using an AI API."""
-        openai.api_key = api_key
         openai.base_url = base_url
+        openai.api_key = api_key
+
+        topic = self.analyze_topic(base_url, api_key, model_id)
 
         for direction in ['across', 'down']:
             for number, word in list(self.clue_ids[direction].items()):
-                clue = self.generate_single_clue(word, base_url, api_key, model_id)
+                clue = self.generate_single_clue(
+                    topic, word, base_url, api_key, model_id)
                 self.clues[direction][number] = clue
 
-    def generate_single_clue(self, word: str, base_url: str, api_key: str, model_id: str) -> str:
+    def analyze_topic(self, base_url: str, api_key: str, model_id: str) -> str:
+        """Analyze the topics of the words provided using the AI API."""
+        openai.base_url = base_url
+        openai.api_key = api_key
+
+        response = openai.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system",
+                    "content": "Deduce the academic topic from the following words."},
+                {"role": "user", "content": f"Words: {', '.join(self.words)}"}
+            ]
+        )
+        topic = response.choices[0].message.content.strip()
+        print(f"Analyzed topic: {topic}")
+        return topic
+
+    def generate_single_clue(self, topic: str, word: str, base_url: str, api_key: str, model_id: str) -> str:
         """Generate a single clue for a word using the AI API."""
         try:
             openai.api_key = api_key
@@ -215,7 +239,7 @@ class CrosswordGenerator:
             response = openai.chat.completions.create(
                 model=model_id,
                 messages=[
-                    {"role": "system", "content": "Generate a concise 1-line crossword clue for children. Avoid mentioning the word directly. No need to mention the word length. Start with verb., n., adj., etc. Your response should be in this format 'n. <Description>.'"},
+                    {"role": "system", "content": f"Generate a concise 1-line crossword clue for children studying {topic}. Avoid mentioning the word directly. Do not include the word length. Start with word type such as verb., n., adj., etc. Your response should be in this format: 'n. <Description>.'"},
                     {"role": "user", "content": f"Word: {word}"}
                 ]
             )
@@ -234,23 +258,25 @@ class CrosswordGenerator:
             return
 
         os.makedirs(output_dir, exist_ok=True)
-        
+
         with open(f'{output_dir}/crossword_clues.txt', 'w', encoding='utf-8') as f:
             f.write("ACROSS:\n")
             for number in sorted(self.clues['across'].keys()):
-                f.write(f"{number}: {self.clues['across'][number]} ({len(self.clue_ids['across'][number])})\n")
-            
+                f.write(
+                    f"{number}: {self.clues['across'][number]} ({len(self.clue_ids['across'][number])})\n")
+
             f.write("\nDOWN:\n")
             for number in sorted(self.clues['down'].keys()):
-                f.write(f"{number}: {self.clues['down'][number]} ({len(self.clue_ids['down'][number])})\n")
-        
+                f.write(
+                    f"{number}: {self.clues['down'][number]} ({len(self.clue_ids['down'][number])})\n")
+
         print(f"Clues saved to '{output_dir}/crossword_clues.txt'")
 
     def get_grid_bounds(self) -> Tuple[int, int, int, int]:
         """Get the minimum and maximum row and column values of the grid."""
         if not self.grid:
             return 0, 0, 0, 0
-            
+
         rows = [r for r, _ in self.grid.keys()]
         cols = [c for _, c in self.grid.keys()]
         return min(rows), max(rows), min(cols), max(cols)
@@ -271,17 +297,17 @@ class CrosswordGenerator:
                 else:
                     row_str.append(' ')
             print(' '.join(row_str))
-    
+
     def draw_grid(self, answer: bool = False, output_dir: str = 'output') -> None:
         """Draw the crossword grid as an image with clue numbers."""
         min_row, max_row, min_col, max_col = self.get_grid_bounds()
-        
+
         # Create a mapping of starting positions to clue numbers
         clue_positions = {}
         for pw in self.placed_words:
             row, col = pw.row, pw.col
             direction = pw.direction
-            
+
             for direction_key in ['across', 'down']:
                 for number, word in self.clue_ids[direction_key].items():
                     if word == pw.word and (
@@ -290,40 +316,41 @@ class CrosswordGenerator:
                     ):
                         clue_positions[(row, col)] = number
                         break
-        
+
         # Image settings
         cell_size = 40
         padding = 20
         font_size = 20
         number_size = 10
-        
+
         # Calculate image dimensions
         grid_width = max_col - min_col + 1
         grid_height = max_row - min_row + 1
         img_width = grid_width * cell_size + 2 * padding
         img_height = grid_height * cell_size + 2 * padding
-        
+
         # Create image
         img = Image.new('RGB', (img_width, img_height), 'white')
         draw = ImageDraw.Draw(img)
-        
+
         try:
             main_font = ImageFont.truetype("Arial", font_size)
             number_font = ImageFont.truetype("Arial", number_size)
         except IOError:
             main_font = ImageFont.load_default()
             number_font = ImageFont.load_default()
-        
+
         # Draw the grid cells
         for r in range(min_row, max_row + 1):
             for c in range(min_col, max_col + 1):
                 x = padding + (c - min_col) * cell_size
                 y = padding + (r - min_row) * cell_size
-                
+
                 if (r, c) in self.grid:
                     # Draw cell rectangle
-                    draw.rectangle([x, y, x + cell_size, y + cell_size], outline='black', width=1)
-                    
+                    draw.rectangle([x, y, x + cell_size, y +
+                                   cell_size], outline='black', width=1)
+
                     # Draw letter if answer grid
                     letter = ' '
                     if answer:
@@ -335,7 +362,7 @@ class CrosswordGenerator:
                         font=main_font,
                         anchor="mm"
                     )
-                    
+
                     # Draw clue number if this is a starting position
                     if (r, c) in clue_positions:
                         draw.text(
@@ -344,7 +371,7 @@ class CrosswordGenerator:
                             fill='black',
                             font=number_font
                         )
-        
+
         os.makedirs(output_dir, exist_ok=True)
         filename = f'{output_dir}/crossword_puzzle_{"answer" if answer else "question"}.png'
         img.save(filename)
@@ -353,10 +380,14 @@ class CrosswordGenerator:
 
 def main():
     """Main function to run the crossword generator."""
-    parser = argparse.ArgumentParser(description="Generate a crossword puzzle.")
-    parser.add_argument("words", nargs="+", help="List of words to include in the crossword.")
-    parser.add_argument("--max-attempts", type=int, default=30, help="Maximum number of attempts to generate a grid")
-    parser.add_argument("--output-dir", default="output", help="Directory to save output files")
+    parser = argparse.ArgumentParser(
+        description="Generate a crossword puzzle.")
+    parser.add_argument("words", nargs="+",
+                        help="List of words to include in the crossword.")
+    parser.add_argument("--max-attempts", type=int, default=30,
+                        help="Maximum number of attempts to generate a grid")
+    parser.add_argument("--output-dir", default="output",
+                        help="Directory to save output files")
     args = parser.parse_args()
 
     # Read configuration from environment variables
@@ -383,7 +414,7 @@ def main():
         # Save as images
         generator.draw_grid(answer=False, output_dir=args.output_dir)
         generator.draw_grid(answer=True, output_dir=args.output_dir)
-        
+
         # Create PDF
         create_crossword_pdf(
             image_path=f"{args.output_dir}/crossword_puzzle_question.png",
