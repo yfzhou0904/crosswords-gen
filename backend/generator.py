@@ -222,12 +222,17 @@ class CrosswordGenerator:
             model=model_id,
             messages=[
                 {"role": "system",
-                    "content": "Deduce the academic topic from the following words."},
+                    "content": "Deduce the academic topic from the following words. Your output should be a single word or a phrase."},
                 {"role": "user", "content": f"Words: {', '.join(self.words)}"}
             ]
         )
         topic = response.choices[0].message.content.strip()
         print(f"Analyzed topic: {topic}")
+        words_in_topic = len(topic.split())
+        if words_in_topic > 4:
+            print(
+                f"Error: Topic '{topic}' has {words_in_topic} words, which exceeds the 4-word limit.")
+            return ""
         return topic
 
     def generate_single_clue(self, topic: str, word: str, base_url: str, api_key: str, model_id: str) -> str:
@@ -236,10 +241,16 @@ class CrosswordGenerator:
             openai.api_key = api_key
             openai.base_url = base_url
 
+            system_prompt = (
+                f"Generate a concise 1-line crossword clue for children studying {topic}. "
+                if topic else
+                "Generate a concise 1-line crossword clue for children. "
+            ) + "Avoid mentioning the word directly. Do not include the word length. Start with word type such as verb., n., adj., etc. Your response should be in this format: 'n. <Description>.'"
+
             response = openai.chat.completions.create(
                 model=model_id,
                 messages=[
-                    {"role": "system", "content": f"Generate a concise 1-line crossword clue for children studying {topic}. Avoid mentioning the word directly. Do not include the word length. Start with word type such as verb., n., adj., etc. Your response should be in this format: 'n. <Description>.'"},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Word: {word}"}
                 ]
             )
